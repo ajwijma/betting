@@ -89,7 +89,6 @@ private:
     QNetworkAccessManager qnam;
     QNetworkReply *reply;
     QByteArray *byteArray;
-    QJsonDocument *json;
     int httpGetId;
     bool httpRequestAborted;
 };

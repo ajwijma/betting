@@ -145,25 +145,34 @@ void HttpWindow::httpFinished()
         return;
     }
 
-//    byteArray->clear();
-//    byteArray->append(QString("{\"Array\":[true,999,\"string\"],\"Key\":\"Value\",\"null\":null}"));
-    while (byteArray->at(0) != '{')
-        byteArray->remove(0, 1);
-    json = new QJsonDocument();
+    QJsonDocument json;
     QJsonParseError error;
-    *json = QJsonDocument::fromJson(*byteArray, &error);
-//    byteArray->clear();
+    json = QJsonDocument::fromJson(*byteArray, &error);
+    byteArray->clear();
 
-    QJsonValue value = json->object().value("page").toObject().value("config").toObject().value("marketData");
+//    QFile qq("qq.txt");
+//    qq.open(QIODevice::WriteOnly | QIODevice::Text);
+//    qq.write(json.toJson());
+//    qq.close();
+
+    qDebug() << json.toJson();
+
+    QJsonValue value = json.object().value("page").toObject().value("config").toObject().value("marketData");
 
     QJsonArray array = value.toArray();
     for (QJsonArray::const_iterator i = array.begin(); i != array.end(); i++)
     {
         QJsonArray a = i->toObject().value("runners").toArray();
-        QString    x = a[0].toObject().value("prices").toObject().value("back").toArray()[0].toObject().value("price").toString();
-        QString    y = a[1].toObject().value("prices").toObject().value("back").toArray()[0].toObject().value("price").toString();
 
-        qDebug() << i->toObject().value("eventName").toString() << QString("(%1 / %2)").arg(x).arg(y);
+        if (a[0].toObject().value("prices").isUndefined())
+            continue;
+        if (a[1].toObject().value("prices").isUndefined())
+            continue;
+
+        double x = a[0].toObject().value("prices").toObject().value("back").toArray()[0].toObject().value("price").toDouble();
+        double y = a[1].toObject().value("prices").toObject().value("back").toArray()[0].toObject().value("price").toDouble();
+
+        qDebug() << i->toObject().value("eventName").toString() << QString("(%1 / %2, %3 %)").arg(x).arg(y).arg(100.0 * (1/x + 1/y));
     }
 
     QVariant redirectionTarget = reply->attribute(QNetworkRequest::RedirectionTargetAttribute);
@@ -190,7 +199,7 @@ void HttpWindow::httpFinished()
     }
     else
     {
-        statusLabel->setText(tr("Downloaded JSON object contains %1 elements.").arg(json->object().size()));
+        statusLabel->setText(tr("Downloaded JSON object contains %1 elements.").arg(json.object().size()));
         downloadButton->setEnabled(true);
     }
 
