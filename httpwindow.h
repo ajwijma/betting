@@ -46,51 +46,51 @@
 #include <QUrl>
 
 QT_BEGIN_NAMESPACE
-class QDialogButtonBox;
-class QFile;
-class QLabel;
-class QLineEdit;
-class QPushButton;
 class QSslError;
-class QAuthenticator;
 class QNetworkReply;
+class QTimer;
 QT_END_NAMESPACE
+
+namespace Ui
+{
+    class Dialog;
+}
 
 class HttpWindow : public QDialog
 {
     Q_OBJECT
 
 public:
-    HttpWindow(QWidget *parent = 0);
-
-    void startRequest(QUrl url);
+    explicit HttpWindow(QWidget *parent = 0);
+    ~HttpWindow();
 
 private slots:
-    void downloadFile();
-    void cancelDownload();
-    void httpFinished();
-    void httpReadyRead();
-    void updateDataReadProgress(qint64 bytesRead, qint64 totalBytes);
-    void enableDownloadButton();
-    void slotAuthenticationRequired(QNetworkReply*,QAuthenticator *);
+    void timerAction();
+    void downloadTennisHighlights();
+    void downloadTennisMarkets();
+    void httpTennisHighlightsFinished();
+    void httpTennisMarketsFinished();
 #ifndef QT_NO_SSL
-    void sslErrors(QNetworkReply*,const QList<QSslError> &errors);
+    void sslErrors(QNetworkReply *, const QList<QSslError> &errors);
 #endif
 
 private:
-    QLabel *statusLabel;
-    QLabel *urlLabel;
-    QLineEdit *urlLineEdit;
-    QPushButton *downloadButton;
-    QPushButton *quitButton;
-    QDialogButtonBox *buttonBox;
+    Ui::Dialog *ui;
+    QString urlTennisHighlights;
+    QString urlTennisMarketsBase;
+    QString urlTennisMarkets;
 
     QUrl url;
     QNetworkAccessManager qnam;
-    QNetworkReply *reply;
-    QByteArray *byteArray;
-    int httpGetId;
-    bool httpRequestAborted;
+    QNetworkReply *replyTennisHighlights;
+    int replies;
+    QNetworkReply *replyTennisMarkets[16];
+
+    QList<QString> marketIds;
+
+    QTimer *timer;
+    int m_iTennisHighlightsTimeout;
+    int m_iTennisMarketsTimeout;
 };
 
 #endif

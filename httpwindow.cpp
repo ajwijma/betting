@@ -42,147 +42,178 @@
 #include <QtNetwork>
 
 #include "httpwindow.h"
-#include "ui_authenticationdialog.h"
+#include "ui_dialog.h"
 
-HttpWindow::HttpWindow(QWidget *parent)
-    : QDialog(parent)
+HttpWindow::HttpWindow(QWidget *parent) : QDialog(parent), ui(new Ui::Dialog)
 {
+    ui->setupUi(this);
+
+    urlTennisHighlights  = "https://www.betfair.com/exchange/tennis?modules=tennishighlights&container=false&isAjax=true&eventTypeId=undefined&alt=json";
+    urlTennisMarketsBase = "https://uk-api.betfair.com/www/sports/exchange/readonly/v1.0/bymarket?currencyCode=EUR&alt=json&locale=en_GB&types=MARKET_STATE%2CMARKET_RATES%2CMARKET_DESCRIPTION%2CEVENT%2CRUNNER_DESCRIPTION%2CRUNNER_STATE%2CRUNNER_EXCHANGE_PRICES_BEST%2CRUNNER_METADATA&marketIds=";
+
+    ui->tableWidget->setColumnCount(10);
+
+    m_iTennisHighlightsTimeout = 1;
+    m_iTennisMarketsTimeout    = 5;
+    timer = new QTimer;
+    timer->setInterval(1000);
+
+    connect(ui->pushButtonStart, SIGNAL(clicked()), timer, SLOT(start()));
+    connect(timer, SIGNAL(timeout()), this, SLOT(timerAction()));
+
 #ifndef QT_NO_SSL
-    urlLineEdit = new QLineEdit("https://www.betfair.com/exchange/tennis?modules=tennishighlights&container=false&isAjax=true&eventTypeId=undefined&alt=json");
-#else
-    urlLineEdit = new QLineEdit("http://qt-project.org/");
+    connect(&qnam, SIGNAL(sslErrors(QNetworkReply *, QList<QSslError>)), this, SLOT(sslErrors(QNetworkReply *, QList<QSslError>)));
 #endif
-
-    urlLabel = new QLabel(tr("&URL:"));
-    urlLabel->setBuddy(urlLineEdit);
-    statusLabel = new QLabel(tr("Please enter the URL of a file you want to "
-                                "download."));
-    statusLabel->setWordWrap(true);
-
-    downloadButton = new QPushButton(tr("Download"));
-    downloadButton->setDefault(false);
-    quitButton = new QPushButton(tr("Quit"));
-    quitButton->setAutoDefault(false);
-
-    buttonBox = new QDialogButtonBox;
-    buttonBox->addButton(downloadButton, QDialogButtonBox::ActionRole);
-    buttonBox->addButton(quitButton, QDialogButtonBox::RejectRole);
-
-    connect(urlLineEdit, SIGNAL(textChanged(QString)),
-            this, SLOT(enableDownloadButton()));
-
-    connect(&qnam, SIGNAL(authenticationRequired(QNetworkReply*,QAuthenticator*)),
-            this, SLOT(slotAuthenticationRequired(QNetworkReply*,QAuthenticator*)));
-#ifndef QT_NO_SSL
-    connect(&qnam, SIGNAL(sslErrors(QNetworkReply*,QList<QSslError>)),
-            this, SLOT(sslErrors(QNetworkReply*,QList<QSslError>)));
-#endif
-//    connect(progressDialog, SIGNAL(canceled()), this, SLOT(cancelDownload()));
-    connect(downloadButton, SIGNAL(clicked()), this, SLOT(downloadFile()));
-    connect(quitButton, SIGNAL(clicked()), this, SLOT(close()));
-
-    QHBoxLayout *topLayout = new QHBoxLayout;
-    topLayout->addWidget(urlLabel);
-    topLayout->addWidget(urlLineEdit);
-
-    QVBoxLayout *mainLayout = new QVBoxLayout;
-    mainLayout->addLayout(topLayout);
-    mainLayout->addWidget(statusLabel);
-    mainLayout->addWidget(buttonBox);
-    setLayout(mainLayout);
 
     setWindowTitle(tr("HTTP"));
-    urlLineEdit->setFocus();
 }
 
-void HttpWindow::startRequest(QUrl url)
+HttpWindow::~HttpWindow()
 {
-    reply = qnam.get(QNetworkRequest(url));
-    connect(reply, SIGNAL(finished()),
-            this, SLOT(httpFinished()));
-    connect(reply, SIGNAL(readyRead()),
-            this, SLOT(httpReadyRead()));
-    connect(reply, SIGNAL(downloadProgress(qint64,qint64)),
-            this, SLOT(updateDataReadProgress(qint64,qint64)));
+    delete ui;
 }
 
-void HttpWindow::downloadFile()
+void HttpWindow::timerAction()
 {
-    url = urlLineEdit->text();
-
-    QFileInfo fileInfo(url.path());
-    QString fileName = fileInfo.fileName();
-    if (fileName.isEmpty())
-        fileName = "index.html";
-
-    byteArray = new QByteArray();
-
-    downloadButton->setEnabled(false);
-
-    // schedule the request
-    httpRequestAborted = false;
-    startRequest(url);
-}
-
-void HttpWindow::cancelDownload()
-{
-    statusLabel->setText(tr("Download canceled."));
-    httpRequestAborted = true;
-    if (reply)
-        reply->abort();
-    downloadButton->setEnabled(true);
-}
-
-void HttpWindow::httpFinished()
-{
-    if (httpRequestAborted) {
-        if (byteArray) {
-            byteArray->clear();
-            delete byteArray;
-            byteArray = 0;
-        }
-        reply->deleteLater();
-        return;
+    if (--m_iTennisHighlightsTimeout <= 0)
+    {
+        downloadTennisHighlights();
+        m_iTennisHighlightsTimeout = 60;
     }
 
-    QJsonDocument json;
-    QJsonParseError error;
-    json = QJsonDocument::fromJson(*byteArray, &error);
-    byteArray->clear();
+    if (--m_iTennisMarketsTimeout <= 0)
+    {
+        downloadTennisMarkets();
+        m_iTennisMarketsTimeout = 5;
+    }
+}
 
-//    QFile qq("qq.txt");
-//    qq.open(QIODevice::WriteOnly | QIODevice::Text);
-//    qq.write(json.toJson());
-//    qq.close();
+void HttpWindow::downloadTennisHighlights()
+{
+    replyTennisHighlights = qnam.get(QNetworkRequest(urlTennisHighlights));
+
+    connect(replyTennisHighlights, SIGNAL(finished()),
+            this, SLOT(httpTennisHighlightsFinished()));
+}
+
+void HttpWindow::downloadTennisMarkets()
+{
+    int count = 0;
+
+    replies = 0;
+
+    urlTennisMarkets = urlTennisMarketsBase;
+    for (QList<QString>::iterator i = marketIds.begin(); i != marketIds.end(); i++)
+    {
+        if (count == 0)
+        {
+            urlTennisMarkets.append(*i);
+        }
+        else
+        {
+            urlTennisMarkets.append("%2C");
+            urlTennisMarkets.append(*i);
+        }
+
+        if (++count >= 20)
+        {
+            replyTennisMarkets[replies] = qnam.get(QNetworkRequest(urlTennisMarkets));
+            connect(replyTennisMarkets[replies], SIGNAL(finished()),
+                    this, SLOT(httpTennisMarketsFinished()));
+            replies++;
+            count = 0;
+            urlTennisMarkets = urlTennisMarketsBase;
+        }
+    }
+
+    if (count)
+    {
+        replyTennisMarkets[replies] = qnam.get(QNetworkRequest(urlTennisMarkets));
+        connect(replyTennisMarkets[replies], SIGNAL(finished()),
+                this, SLOT(httpTennisMarketsFinished()));
+
+    }
+}
+
+void HttpWindow::httpTennisHighlightsFinished()
+{
+    QJsonDocument   json;
+    QJsonParseError error;
+    int count = 0;
+
+    json = QJsonDocument::fromJson(replyTennisHighlights->readAll(), &error);
+
+    QFile qq("tennis_highlights.txt");
+    qq.open(QIODevice::WriteOnly | QIODevice::Text);
+    qq.write(json.toJson());
+    qq.close();
 
     qDebug() << json.toJson();
 
     QJsonValue value = json.object().value("page").toObject().value("config").toObject().value("marketData");
 
     QJsonArray array = value.toArray();
+    marketIds.clear();
     for (QJsonArray::const_iterator i = array.begin(); i != array.end(); i++)
     {
-        QJsonArray a = i->toObject().value("runners").toArray();
+        QJsonArray a;
+
+        if (i->toObject().value("marketId").isUndefined())
+        {
+            qDebug() << "No marketId";
+            continue;
+        }
+        if (i->toObject().value("eventName").isUndefined())
+        {
+            qDebug() << "No eventName";
+            continue;
+        }
+
+        if (i->toObject().value("runners").isUndefined())
+        {
+            qDebug() << "No runners";
+            continue;
+        }
+
+        a = i->toObject().value("runners").toArray();
 
         if (a[0].toObject().value("prices").isUndefined())
+        {
+            qDebug() << "No prices 0";
             continue;
+        }
         if (a[1].toObject().value("prices").isUndefined())
+        {
+            qDebug() << "No prices 1";
             continue;
+        }
 
-        double x = a[0].toObject().value("prices").toObject().value("back").toArray()[0].toObject().value("price").toDouble();
-        double y = a[1].toObject().value("prices").toObject().value("back").toArray()[0].toObject().value("price").toDouble();
+        marketIds.append(i->toObject().value("marketId").toString());
 
-        qDebug() << i->toObject().value("eventName").toString() << QString("(%1 / %2, %3 %)").arg(x).arg(y).arg(100.0 * (1/x + 1/y));
+//      double x = a[0].toObject().value("prices").toObject().value("back").toArray()[0].toObject().value("price").toDouble();
+//      double y = a[1].toObject().value("prices").toObject().value("back").toArray()[0].toObject().value("price").toDouble();
+
+        qDebug() << i->toObject().value("eventName").toString();
+        if (ui->tableWidget->rowCount() < count + 1)
+            ui->tableWidget->insertRow(count);
+        ui->tableWidget->setItem(count++, 0, new QTableWidgetItem(i->toObject().value("eventName").toString()));
+//      table->insertRow(1);
+
+//        qDebug() << i->toObject().value("eventName").toString() << QString("(%1 / %2, %3 %)").arg(x).arg(y).arg(100.0 * (1/x + 1/y)) << i->toObject().value("marketId").toString();
     }
 
-    QVariant redirectionTarget = reply->attribute(QNetworkRequest::RedirectionTargetAttribute);
-    if (reply->error())
+    qDebug() << marketIds.count();
+
+    ui->tableWidget->resizeColumnsToContents();
+
+//    downloadTennisMarkets();
+
+    QVariant redirectionTarget = replyTennisHighlights->attribute(QNetworkRequest::RedirectionTargetAttribute);
+    if (replyTennisHighlights->error())
     {
-        byteArray->clear();
         QMessageBox::information(this, tr("HTTP"),
                                  tr("Download failed: %1.")
-                                 .arg(reply->errorString()));
-        downloadButton->setEnabled(true);
+                                 .arg(replyTennisHighlights->errorString()));
     }
     else if (!redirectionTarget.isNull())
     {
@@ -191,70 +222,170 @@ void HttpWindow::httpFinished()
                                   tr("Redirect to %1 ?").arg(newUrl.toString()),
                                   QMessageBox::Yes | QMessageBox::No) == QMessageBox::Yes) {
             url = newUrl;
-            reply->deleteLater();
-            byteArray->clear();
-            startRequest(url);
+            replyTennisHighlights->deleteLater();
+//            startRequest(url);
             return;
         }
     }
     else
     {
-        statusLabel->setText(tr("Downloaded JSON object contains %1 elements.").arg(json.object().size()));
-        downloadButton->setEnabled(true);
     }
 
-    reply->deleteLater();
-    reply = 0;
-    delete byteArray;
-    byteArray = 0;
+    replyTennisHighlights->deleteLater();
+    replyTennisHighlights = NULL;
 }
 
-void HttpWindow::httpReadyRead()
+void HttpWindow::httpTennisMarketsFinished()
 {
-    // this slot gets called every time the QNetworkReply has new data.
-    // We read all of its new data and write it into the file.
-    // That way we use less RAM than when reading it at the finished()
-    // signal of the QNetworkReply
-//    qDebug() << reply->readAll();
+    QJsonDocument   json;
+    QJsonParseError error;
+    QTableWidgetItem *item;
+    int i;
+    static int count = 0;
 
-    if (byteArray)
-        byteArray->append(reply->readAll());
-}
-
-void HttpWindow::updateDataReadProgress(qint64 bytesRead, qint64 totalBytes)
-{
-    if (httpRequestAborted)
-        return;
-
-    qDebug() << bytesRead << ":" << totalBytes;
-}
-
-void HttpWindow::enableDownloadButton()
-{
-    downloadButton->setEnabled(!urlLineEdit->text().isEmpty());
-}
-
-void HttpWindow::slotAuthenticationRequired(QNetworkReply*,QAuthenticator *authenticator)
-{
-    QDialog dlg;
-    Ui::Dialog ui;
-    ui.setupUi(&dlg);
-    dlg.adjustSize();
-    ui.siteDescription->setText(tr("%1 at %2").arg(authenticator->realm()).arg(url.host()));
-
-    // Did the URL have information? Fill the UI
-    // This is only relevant if the URL-supplied credentials were wrong
-    ui.userEdit->setText(url.userName());
-    ui.passwordEdit->setText(url.password());
-
-    if (dlg.exec() == QDialog::Accepted) {
-        authenticator->setUser(ui.userEdit->text());
-        authenticator->setPassword(ui.passwordEdit->text());
+    for (i = 0; i < 16; i++)
+    {
+        if (replyTennisMarkets[i] && replyTennisMarkets[i]->isFinished())
+            break;
     }
+
+//    dataTennisMarkets->append(replyTennisMarkets[i]->readAll());
+
+    json = QJsonDocument::fromJson(replyTennisMarkets[i]->readAll(), &error);
+//    dataTennisMarkets->clear();
+
+    QString ww("tennis_markets");
+    ww.append(QString("_%1").arg(count++));
+    ww.append(".txt");
+    QFile qq(ww);
+    qq.open(QIODevice::WriteOnly | QIODevice::Text);
+    qq.write(json.toJson());
+    qq.close();
+
+    QJsonValue value = json.object().value("eventTypes").toArray()[0].toObject().value("eventNodes");
+    QJsonArray array = value.toArray();
+
+    for (QJsonArray::const_iterator i = array.begin(); i != array.end(); i++)
+    {
+        QJsonArray a, b, c, d, e, f;
+        QString marketId, text;
+        int row, column;
+
+        a = i->toObject().value("marketNodes").toArray();
+        marketId = a[0].toObject().value("marketId").toString();
+
+        for (row = 0; row < marketIds.count(); row++)
+        {
+            if (marketIds[row] == marketId)
+            {
+                break;
+            }
+        }
+
+        if (row == marketIds.count())
+            continue;
+
+        b = a[0].toObject().value("runners").toArray();
+        c = b[0].toObject().value("exchange").toObject().value("availableToBack").toArray();
+        d = b[0].toObject().value("exchange").toObject().value("availableToLay").toArray();
+        e = b[1].toObject().value("exchange").toObject().value("availableToBack").toArray();
+        f = b[1].toObject().value("exchange").toObject().value("availableToLay").toArray();
+
+        column = 3;
+        for (QJsonArray::const_iterator j = c.begin(); j != c.end(); j++)
+        {
+            double price, size;
+
+            price = j->toObject().value("price").toDouble();
+            size  = j->toObject().value("size").toDouble();
+
+            item = ui->tableWidget->item(row, column);
+
+            if (item == NULL)
+            {
+                item = new QTableWidgetItem;
+                item->setText(QString("%1").arg(price));
+                item->setBackgroundColor(QColor(0, 255, 0));
+                ui->tableWidget->setItem(row, column, item);
+            }
+            else
+            {
+                text = QString("%1").arg(price);
+
+                if (text == item->text())
+                    item->setBackgroundColor(QColor(255, 255, 255));
+                else
+                    item->setBackgroundColor(QColor(0, 255, 0));
+
+                item->setText(text);
+            }
+
+            column--;
+        }
+
+        column = 5;
+        for (QJsonArray::const_iterator j = e.begin(); j != e.end(); j++)
+        {
+            double price, size;
+
+            price = j->toObject().value("price").toDouble();
+            size  = j->toObject().value("size").toDouble();
+
+            item = ui->tableWidget->item(row, column);
+
+            if (item == NULL)
+            {
+                item = new QTableWidgetItem;
+                item->setText(QString("%1").arg(price));
+                item->setBackgroundColor(QColor(0, 255, 0));
+                ui->tableWidget->setItem(row, column, item);
+            }
+            else
+            {
+                text = QString("%1").arg(price);
+
+                if (text == item->text())
+                    item->setBackgroundColor(QColor(255, 255, 255));
+                else
+                    item->setBackgroundColor(QColor(0, 255, 0));
+
+                item->setText(text);
+            }
+
+            column++;
+        }
+
+        column = 9;
+        item = ui->tableWidget->item(row, column);
+        double p = c[0].toObject().value("price").toDouble();
+        double q = e[0].toObject().value("price").toDouble();
+        text = QString("%1").arg(100.0 * (1/p + 1/q));
+        if (item == NULL)
+        {
+            item = new QTableWidgetItem;
+            item->setText(text);
+            item->setBackgroundColor(QColor(0, 255, 0));
+            ui->tableWidget->setItem(row, column, item);
+        }
+        else
+        {
+            if (text == item->text())
+                item->setBackgroundColor(QColor(255, 255, 255));
+            else
+                item->setBackgroundColor(QColor(0, 255, 0));
+
+            item->setText(text);
+        }
+    }
+
+    ui->tableWidget->resizeColumnsToContents();
+
+    replyTennisMarkets[i]->deleteLater();
+    replyTennisMarkets[i] = NULL;
 }
 
 #ifndef QT_NO_SSL
-void HttpWindow::sslErrors(QNetworkReply*,const QList<QSslError> &errors)
+void HttpWindow::sslErrors(QNetworkReply *, const QList<QSslError> &errors)
 {
     QString errorString;
     foreach (const QSslError &error, errors) {
@@ -265,8 +396,9 @@ void HttpWindow::sslErrors(QNetworkReply*,const QList<QSslError> &errors)
 
     if (QMessageBox::warning(this, tr("HTTP"),
                              tr("One or more SSL errors has occurred: %1").arg(errorString),
-                             QMessageBox::Ignore | QMessageBox::Abort) == QMessageBox::Ignore) {
-        reply->ignoreSslErrors();
+                             QMessageBox::Ignore | QMessageBox::Abort) == QMessageBox::Ignore)
+    {
+        replyTennisHighlights->ignoreSslErrors();
     }
 }
 #endif
