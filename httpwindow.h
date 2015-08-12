@@ -44,6 +44,7 @@
 #include <QDialog>
 #include <QNetworkAccessManager>
 #include <QUrl>
+#include <QtWebSockets/QWebSocket>
 
 QT_BEGIN_NAMESPACE
 class QSslError;
@@ -70,27 +71,34 @@ private slots:
     void downloadTennisMarkets();
     void httpTennisHighlightsFinished();
     void httpTennisMarketsFinished();
-#ifndef QT_NO_SSL
+    void httpPokerStarsFinished();
     void sslErrors(QNetworkReply *, const QList<QSslError> &errors);
-#endif
+    void pokerStars();
+    void onConnected();
+    void onTextMessageReceived(const QString &message);
+    void onSslErrors(const QList<QSslError> &errors);
 
 private:
     Ui::Dialog *ui;
     QString urlTennisHighlights;
     QString urlTennisMarketsBase;
     QString urlTennisMarkets;
+    QString urlPokerStars;
 
     QUrl url;
     QNetworkAccessManager qnam;
     QNetworkReply *replyTennisHighlights;
     int replies;
     QNetworkReply *replyTennisMarkets[16];
+    QNetworkReply *replyPokerStars;
 
-    QList<QString> marketIds;
+    QStringList marketIds;
 
     QTimer *timer;
     int m_iTennisHighlightsTimeout;
     int m_iTennisMarketsTimeout;
+
+    QWebSocket webSocket;
 };
 
 #endif

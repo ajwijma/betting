@@ -51,19 +51,19 @@ HttpWindow::HttpWindow(QWidget *parent) : QDialog(parent), ui(new Ui::Dialog)
     urlTennisHighlights  = "https://www.betfair.com/exchange/tennis?modules=tennishighlights&container=false&isAjax=true&eventTypeId=undefined&alt=json";
     urlTennisMarketsBase = "https://uk-api.betfair.com/www/sports/exchange/readonly/v1.0/bymarket?currencyCode=EUR&alt=json&locale=en_GB&types=MARKET_STATE%2CMARKET_RATES%2CMARKET_DESCRIPTION%2CEVENT%2CRUNNER_DESCRIPTION%2CRUNNER_STATE%2CRUNNER_EXCHANGE_PRICES_BEST%2CRUNNER_METADATA&marketIds=";
 
-    ui->tableWidget->setColumnCount(10);
+    ui->tableWidget->setColumnCount(12);
+    ui->tableWidget->setColumnHidden(0, true);
 
     m_iTennisHighlightsTimeout = 1;
     m_iTennisMarketsTimeout    = 5;
     timer = new QTimer;
     timer->setInterval(1000);
 
-    connect(ui->pushButtonStart, SIGNAL(clicked()), timer, SLOT(start()));
+    connect(ui->pushButtonBetfair, SIGNAL(clicked()), timer, SLOT(start()));
+    connect(ui->pushButtonPokerStars, SIGNAL(clicked()), this, SLOT(pokerStars()));
     connect(timer, SIGNAL(timeout()), this, SLOT(timerAction()));
 
-#ifndef QT_NO_SSL
     connect(&qnam, SIGNAL(sslErrors(QNetworkReply *, QList<QSslError>)), this, SLOT(sslErrors(QNetworkReply *, QList<QSslError>)));
-#endif
 
     setWindowTitle(tr("HTTP"));
 }
@@ -92,8 +92,7 @@ void HttpWindow::downloadTennisHighlights()
 {
     replyTennisHighlights = qnam.get(QNetworkRequest(urlTennisHighlights));
 
-    connect(replyTennisHighlights, SIGNAL(finished()),
-            this, SLOT(httpTennisHighlightsFinished()));
+    connect(replyTennisHighlights, SIGNAL(finished()), this, SLOT(httpTennisHighlightsFinished()));
 }
 
 void HttpWindow::downloadTennisMarkets()
@@ -129,8 +128,7 @@ void HttpWindow::downloadTennisMarkets()
     if (count)
     {
         replyTennisMarkets[replies] = qnam.get(QNetworkRequest(urlTennisMarkets));
-        connect(replyTennisMarkets[replies], SIGNAL(finished()),
-                this, SLOT(httpTennisMarketsFinished()));
+        connect(replyTennisMarkets[replies], SIGNAL(finished()), this, SLOT(httpTennisMarketsFinished()));
 
     }
 }
@@ -190,21 +188,19 @@ void HttpWindow::httpTennisHighlightsFinished()
 
         marketIds.append(i->toObject().value("marketId").toString());
 
-//      double x = a[0].toObject().value("prices").toObject().value("back").toArray()[0].toObject().value("price").toDouble();
-//      double y = a[1].toObject().value("prices").toObject().value("back").toArray()[0].toObject().value("price").toDouble();
+        qDebug() << QString::number(i->toObject().value("marketTime").toDouble(), 'f', 0) << i->toObject().value("eventName").toString();
 
-        qDebug() << i->toObject().value("eventName").toString();
         if (ui->tableWidget->rowCount() < count + 1)
             ui->tableWidget->insertRow(count);
-        ui->tableWidget->setItem(count++, 0, new QTableWidgetItem(i->toObject().value("eventName").toString()));
-//      table->insertRow(1);
-
-//        qDebug() << i->toObject().value("eventName").toString() << QString("(%1 / %2, %3 %)").arg(x).arg(y).arg(100.0 * (1/x + 1/y)) << i->toObject().value("marketId").toString();
-    }
+        ui->tableWidget->setItem(count, 0, new QTableWidgetItem(i->toObject().value("marketId").toString()));
+        ui->tableWidget->setItem(count, 1, new QTableWidgetItem(QString::number(i->toObject().value("marketTime").toDouble(), 'f', 0)));
+        ui->tableWidget->setItem(count++, 2, new QTableWidgetItem(i->toObject().value("eventName").toString()));
+   }
 
     qDebug() << marketIds.count();
 
     ui->tableWidget->resizeColumnsToContents();
+    ui->tableWidget->sortByColumn(1);
 
 //    downloadTennisMarkets();
 
@@ -249,10 +245,7 @@ void HttpWindow::httpTennisMarketsFinished()
             break;
     }
 
-//    dataTennisMarkets->append(replyTennisMarkets[i]->readAll());
-
     json = QJsonDocument::fromJson(replyTennisMarkets[i]->readAll(), &error);
-//    dataTennisMarkets->clear();
 
     QString ww("tennis_markets");
     ww.append(QString("_%1").arg(count++));
@@ -274,15 +267,14 @@ void HttpWindow::httpTennisMarketsFinished()
         a = i->toObject().value("marketNodes").toArray();
         marketId = a[0].toObject().value("marketId").toString();
 
-        for (row = 0; row < marketIds.count(); row++)
+        for (row = 0; row < ui->tableWidget->rowCount(); row++)
         {
-            if (marketIds[row] == marketId)
+            if (ui->tableWidget->item(row, 0)->text() == marketId)
             {
                 break;
             }
         }
-
-        if (row == marketIds.count())
+        if (row == ui->tableWidget->rowCount())
             continue;
 
         b = a[0].toObject().value("runners").toArray();
@@ -291,13 +283,13 @@ void HttpWindow::httpTennisMarketsFinished()
         e = b[1].toObject().value("exchange").toObject().value("availableToBack").toArray();
         f = b[1].toObject().value("exchange").toObject().value("availableToLay").toArray();
 
-        column = 3;
+        column = 5;
         for (QJsonArray::const_iterator j = c.begin(); j != c.end(); j++)
         {
-            double price, size;
+            double price; //, size;
 
             price = j->toObject().value("price").toDouble();
-            size  = j->toObject().value("size").toDouble();
+//          size  = j->toObject().value("size").toDouble();
 
             item = ui->tableWidget->item(row, column);
 
@@ -323,13 +315,13 @@ void HttpWindow::httpTennisMarketsFinished()
             column--;
         }
 
-        column = 5;
+        column = 7;
         for (QJsonArray::const_iterator j = e.begin(); j != e.end(); j++)
         {
-            double price, size;
+            double price; //, size;
 
             price = j->toObject().value("price").toDouble();
-            size  = j->toObject().value("size").toDouble();
+//          size  = j->toObject().value("size").toDouble();
 
             item = ui->tableWidget->item(row, column);
 
@@ -355,26 +347,29 @@ void HttpWindow::httpTennisMarketsFinished()
             column++;
         }
 
-        column = 9;
+        column = 11;
         item = ui->tableWidget->item(row, column);
-        double p = c[0].toObject().value("price").toDouble();
-        double q = e[0].toObject().value("price").toDouble();
-        text = QString("%1").arg(100.0 * (1/p + 1/q));
-        if (item == NULL)
+        if (c.size() && e.size())
         {
-            item = new QTableWidgetItem;
-            item->setText(text);
-            item->setBackgroundColor(QColor(0, 255, 0));
-            ui->tableWidget->setItem(row, column, item);
-        }
-        else
-        {
-            if (text == item->text())
-                item->setBackgroundColor(QColor(255, 255, 255));
-            else
+            double p = c[0].toObject().value("price").toDouble();
+            double q = e[0].toObject().value("price").toDouble();
+            text = QString("%1").arg(100.0 * (1/p + 1/q));
+            if (item == NULL)
+            {
+                item = new QTableWidgetItem;
+                item->setText(text);
                 item->setBackgroundColor(QColor(0, 255, 0));
+                ui->tableWidget->setItem(row, column, item);
+            }
+            else
+            {
+                if (text == item->text())
+                    item->setBackgroundColor(QColor(255, 255, 255));
+                else
+                    item->setBackgroundColor(QColor(0, 255, 0));
 
-            item->setText(text);
+                item->setText(text);
+            }
         }
     }
 
@@ -384,7 +379,6 @@ void HttpWindow::httpTennisMarketsFinished()
     replyTennisMarkets[i] = NULL;
 }
 
-#ifndef QT_NO_SSL
 void HttpWindow::sslErrors(QNetworkReply *, const QList<QSslError> &errors)
 {
     QString errorString;
@@ -401,4 +395,54 @@ void HttpWindow::sslErrors(QNetworkReply *, const QList<QSslError> &errors)
         replyTennisHighlights->ignoreSslErrors();
     }
 }
-#endif
+
+void HttpWindow::pokerStars()
+{
+    urlPokerStars = "https://sports.pokerstars.eu/sportsbook/v1/api/getSportSchedule?sport=TENNIS&marketTypes=AB&days=0&embedComps=true&maxPrematch=0&maxInplay=20&topupInplay=false&channelId=6&locale=en-gb";
+
+    replyPokerStars = qnam.get(QNetworkRequest(urlPokerStars));
+
+    connect(replyPokerStars, SIGNAL(finished()), this, SLOT(httpPokerStarsFinished()));
+
+    connect(&webSocket, SIGNAL(connected()), this, SLOT(onConnected()));
+    connect(&webSocket, SIGNAL(sslErrors(const QList<QSslError> &)), this, SLOT(onSslErrors(const QList<QSslError> &)));
+
+    webSocket.open(QUrl(QStringLiteral("wss://sports.pokerstars.eu/websocket")));
+}
+
+void HttpWindow::onConnected()
+{
+    qDebug() << "WebSocket connected";
+    connect(&webSocket, SIGNAL(textMessageReceived(const QString &)), this, SLOT(onTextMessageReceived(const QString &)));
+    webSocket.sendTextMessage(QStringLiteral("{\"PublicLoginRequest\":{\"application\":\"web-sportsbook\",\"locale\":\"en-gb\",\"channel\":\"INTERNET\",\"apiVersion\":2,\"reqId\":0}}"));
+}
+
+void HttpWindow::onTextMessageReceived(const QString &message)
+{
+    qDebug() << "Message received:" << message;
+}
+
+void HttpWindow::onSslErrors(const QList<QSslError> &errors)
+{
+    Q_UNUSED(errors);
+
+    qDebug() << "onSslErrors";
+
+    // WARNING: Never ignore SSL errors in production code.
+    // The proper way to handle self-signed certificates is to add a custom root
+    // to the CA store.
+
+    webSocket.ignoreSslErrors();
+}
+
+void HttpWindow::httpPokerStarsFinished()
+{
+    QJsonDocument   json;
+    QJsonParseError error;
+
+    json = QJsonDocument::fromJson(replyPokerStars->readAll(), &error);
+    QFile qq("pokerstars.txt");
+    qq.open(QIODevice::WriteOnly | QIODevice::Text);
+    qq.write(json.toJson());
+    qq.close();
+}
