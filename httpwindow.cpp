@@ -52,7 +52,7 @@ HttpWindow::HttpWindow(QWidget *parent) : QDialog(parent), ui(new Ui::Dialog)
     urlTennisMarketsBase = "https://uk-api.betfair.com/www/sports/exchange/readonly/v1.0/bymarket?currencyCode=EUR&alt=json&locale=en_GB&types=MARKET_STATE%2CMARKET_RATES%2CMARKET_DESCRIPTION%2CEVENT%2CRUNNER_DESCRIPTION%2CRUNNER_STATE%2CRUNNER_EXCHANGE_PRICES_BEST%2CRUNNER_METADATA&marketIds=";
 
     ui->tableWidget->setColumnCount(12);
-    ui->tableWidget->setColumnHidden(0, true);
+//  ui->tableWidget->setColumnHidden(0, true);
 
     m_iTennisHighlightsTimeout = 1;
     m_iTennisMarketsTimeout    = 5;
@@ -64,8 +64,6 @@ HttpWindow::HttpWindow(QWidget *parent) : QDialog(parent), ui(new Ui::Dialog)
     connect(timer, SIGNAL(timeout()), this, SLOT(timerAction()));
 
     connect(&qnam, SIGNAL(sslErrors(QNetworkReply *, QList<QSslError>)), this, SLOT(sslErrors(QNetworkReply *, QList<QSslError>)));
-
-    setWindowTitle(tr("HTTP"));
 }
 
 HttpWindow::~HttpWindow()
@@ -155,6 +153,8 @@ void HttpWindow::httpTennisHighlightsFinished()
     for (QJsonArray::const_iterator i = array.begin(); i != array.end(); i++)
     {
         QJsonArray a;
+        QString    marketId;
+        int        row;
 
         if (i->toObject().value("marketId").isUndefined())
         {
@@ -186,24 +186,54 @@ void HttpWindow::httpTennisHighlightsFinished()
             continue;
         }
 
-        marketIds.append(i->toObject().value("marketId").toString());
-
         qDebug() << QString::number(i->toObject().value("marketTime").toDouble(), 'f', 0) << i->toObject().value("eventName").toString();
 
-        if (ui->tableWidget->rowCount() < count + 1)
-            ui->tableWidget->insertRow(count);
-        ui->tableWidget->setItem(count, 0, new QTableWidgetItem(i->toObject().value("marketId").toString()));
-        ui->tableWidget->setItem(count, 1, new QTableWidgetItem(QString::number(i->toObject().value("marketTime").toDouble(), 'f', 0)));
-        ui->tableWidget->setItem(count++, 2, new QTableWidgetItem(i->toObject().value("eventName").toString()));
-   }
+        marketId = i->toObject().value("marketId").toString();
+        marketIds.append(marketId);
+        for (row = 0; row < ui->tableWidget->rowCount(); row++)
+        {
+            if (ui->tableWidget->item(row, 0)->text() == marketId)
+                break;
+        }
+        if (row < ui->tableWidget->rowCount())
+        {
+            if (QString::number(i->toObject().value("marketTime").toDouble(), 'f', 0) != ui->tableWidget->item(row, 1)->text())
+                    qDebug() << "marketTime has changed...";
+            continue;
+        }
+        else
+        {
+            ui->tableWidget->insertRow(row);
+            ui->tableWidget->setItem(row, 0, new QTableWidgetItem(i->toObject().value("marketId").toString()));
+            ui->tableWidget->setItem(row, 1, new QTableWidgetItem(QString::number(i->toObject().value("marketTime").toDouble(), 'f', 0)));
+            ui->tableWidget->setItem(row, 2, new QTableWidgetItem(i->toObject().value("eventName").toString()));
+        }
+    }
 
-    qDebug() << marketIds.count();
+    for (int row = 0; row < ui->tableWidget->rowCount(); row++)
+    {
+        int i;
+        for (i = 0; i < marketIds.count(); i++)
+        {
+            if (marketIds[i] == ui->tableWidget->item(row, 0)->text())
+                break;
+        }
+        if (i >= marketIds.count())
+        {
+            ui->tableWidget->removeRow(row);
+            row--;
+        }
+    }
 
+    qDebug() << marketIds.count() << ui->tableWidget->rowCount();
+
+    ui->tableWidget->sortByColumn(1, Qt::AscendingOrder);
     ui->tableWidget->resizeColumnsToContents();
-    ui->tableWidget->sortByColumn(1);
+//  ui->tableWidget->resizeRowsToContents();
 
-//    downloadTennisMarkets();
+    QTimer::singleShot(0, this, SLOT(resizeWindow()));
 
+/*
     QVariant redirectionTarget = replyTennisHighlights->attribute(QNetworkRequest::RedirectionTargetAttribute);
     if (replyTennisHighlights->error())
     {
@@ -226,9 +256,17 @@ void HttpWindow::httpTennisHighlightsFinished()
     else
     {
     }
-
+*/
     replyTennisHighlights->deleteLater();
     replyTennisHighlights = NULL;
+}
+
+void HttpWindow::resizeWindow()
+{
+    qDebug() << size() << sizeHint();
+
+    if (sizeHint() != size())
+        resize(sizeHint());
 }
 
 void HttpWindow::httpTennisMarketsFinished()
@@ -374,6 +412,11 @@ void HttpWindow::httpTennisMarketsFinished()
     }
 
     ui->tableWidget->resizeColumnsToContents();
+//  ui->tableWidget->resizeRowsToContents();
+    QTimer::singleShot(0, this, SLOT(resizeWindow()));
+
+
+    ui->tableWidget->scrollToBottom();
 
     replyTennisMarkets[i]->deleteLater();
     replyTennisMarkets[i] = NULL;
@@ -382,7 +425,8 @@ void HttpWindow::httpTennisMarketsFinished()
 void HttpWindow::sslErrors(QNetworkReply *, const QList<QSslError> &errors)
 {
     QString errorString;
-    foreach (const QSslError &error, errors) {
+    foreach (const QSslError &error, errors)
+    {
         if (!errorString.isEmpty())
             errorString += ", ";
         errorString += error.errorString();

@@ -77,6 +77,7 @@ private slots:
     void onConnected();
     void onTextMessageReceived(const QString &message);
     void onSslErrors(const QList<QSslError> &errors);
+    void resizeWindow();
 
 private:
     Ui::Dialog *ui;
