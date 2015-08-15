@@ -55,7 +55,7 @@ HttpWindow::HttpWindow(QWidget *parent) : QDialog(parent), ui(new Ui::Dialog)
 //  ui->tableWidget->setColumnHidden(0, true);
 
     m_iTennisHighlightsTimeout = 1;
-    m_iTennisMarketsTimeout    = 5;
+    m_iTennisMarketsTimeout    = 6;
     timer = new QTimer;
     timer->setInterval(1000);
 
@@ -73,16 +73,16 @@ HttpWindow::~HttpWindow()
 
 void HttpWindow::timerAction()
 {
-    if (--m_iTennisHighlightsTimeout <= 0)
-    {
-        downloadTennisHighlights();
-        m_iTennisHighlightsTimeout = 60;
-    }
-
     if (--m_iTennisMarketsTimeout <= 0)
     {
         downloadTennisMarkets();
         m_iTennisMarketsTimeout = 5;
+    }
+
+    if (--m_iTennisHighlightsTimeout <= 0)
+    {
+        downloadTennisHighlights();
+        m_iTennisHighlightsTimeout = 60;
     }
 }
 
@@ -207,6 +207,7 @@ void HttpWindow::httpTennisHighlightsFinished()
             ui->tableWidget->setItem(row, 0, new QTableWidgetItem(i->toObject().value("marketId").toString()));
             ui->tableWidget->setItem(row, 1, new QTableWidgetItem(QString::number(i->toObject().value("marketTime").toDouble(), 'f', 0)));
             ui->tableWidget->setItem(row, 2, new QTableWidgetItem(i->toObject().value("eventName").toString()));
+            ui->tableWidget->item(row, 2)->setBackgroundColor(QColor(0, 255, 0));
             added++;
         }
     }
@@ -221,8 +222,8 @@ void HttpWindow::httpTennisHighlightsFinished()
         }
         if (i >= marketIds.count())
         {
-            ui->tableWidget->removeRow(row);
-            row--;
+            ui->tableWidget->item(row, 2)->setBackgroundColor(QColor(255, 0, 0));
+//          row--;
             deleted++;
         }
     }
@@ -281,6 +282,19 @@ void HttpWindow::httpTennisMarketsFinished()
     QTableWidgetItem *item;
     int i;
     static int count = 0;
+
+    for (int row = 0; row < ui->tableWidget->rowCount(); row++)
+    {
+        if (ui->tableWidget->item(row, 2)->backgroundColor() == QColor(255, 0, 0))
+        {
+            ui->tableWidget->removeRow(row);
+            row--;
+        }
+        else if (ui->tableWidget->item(row, 2)->backgroundColor() == QColor(0, 255, 0))
+        {
+            ui->tableWidget->item(row, 2)->setBackgroundColor(QColor(255, 255, 255));
+        }
+    }
 
     for (i = 0; i < 16; i++)
     {
