@@ -135,7 +135,7 @@ void HttpWindow::httpTennisHighlightsFinished()
 {
     QJsonDocument   json;
     QJsonParseError error;
-    int count = 0;
+    int             added = 0, deleted = 0;
 
     json = QJsonDocument::fromJson(replyTennisHighlights->readAll(), &error);
 
@@ -144,7 +144,7 @@ void HttpWindow::httpTennisHighlightsFinished()
     qq.write(json.toJson());
     qq.close();
 
-    qDebug() << json.toJson();
+//  qDebug() << json.toJson();
 
     QJsonValue value = json.object().value("page").toObject().value("config").toObject().value("marketData");
 
@@ -207,6 +207,7 @@ void HttpWindow::httpTennisHighlightsFinished()
             ui->tableWidget->setItem(row, 0, new QTableWidgetItem(i->toObject().value("marketId").toString()));
             ui->tableWidget->setItem(row, 1, new QTableWidgetItem(QString::number(i->toObject().value("marketTime").toDouble(), 'f', 0)));
             ui->tableWidget->setItem(row, 2, new QTableWidgetItem(i->toObject().value("eventName").toString()));
+            added++;
         }
     }
 
@@ -222,10 +223,11 @@ void HttpWindow::httpTennisHighlightsFinished()
         {
             ui->tableWidget->removeRow(row);
             row--;
+            deleted++;
         }
     }
 
-    qDebug() << marketIds.count() << ui->tableWidget->rowCount();
+    qDebug() << marketIds.count() << ui->tableWidget->rowCount() << added << deleted;
 
     ui->tableWidget->sortByColumn(1, Qt::AscendingOrder);
     ui->tableWidget->resizeColumnsToContents();
@@ -266,7 +268,10 @@ void HttpWindow::resizeWindow()
     qDebug() << size() << sizeHint();
 
     if (sizeHint() != size())
-        resize(sizeHint());
+    {
+//      resize(sizeHint());
+        adjustSize();
+    }
 }
 
 void HttpWindow::httpTennisMarketsFinished()
@@ -414,9 +419,6 @@ void HttpWindow::httpTennisMarketsFinished()
     ui->tableWidget->resizeColumnsToContents();
 //  ui->tableWidget->resizeRowsToContents();
     QTimer::singleShot(0, this, SLOT(resizeWindow()));
-
-
-    ui->tableWidget->scrollToBottom();
 
     replyTennisMarkets[i]->deleteLater();
     replyTennisMarkets[i] = NULL;
