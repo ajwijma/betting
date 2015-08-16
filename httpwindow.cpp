@@ -97,8 +97,6 @@ void HttpWindow::downloadTennisMarkets()
 {
     int count = 0;
 
-    replies = 0;
-
     urlTennisMarkets = urlTennisMarketsBase;
     for (QList<QString>::iterator i = marketIds.begin(); i != marketIds.end(); i++)
     {
@@ -114,19 +112,18 @@ void HttpWindow::downloadTennisMarkets()
 
         if (++count >= 20)
         {
-            replyTennisMarkets[replies] = qnam.get(QNetworkRequest(urlTennisMarkets));
-            connect(replyTennisMarkets[replies], SIGNAL(finished()),
-                    this, SLOT(httpTennisMarketsFinished()));
-            replies++;
-            count = 0;
+            replyTennisMarkets.append(qnam.get(QNetworkRequest(urlTennisMarkets)));
+            connect(replyTennisMarkets.last(), SIGNAL(finished()), this, SLOT(httpTennisMarketsFinished()));
+
             urlTennisMarkets = urlTennisMarketsBase;
+            count = 0;
         }
     }
 
     if (count)
     {
-        replyTennisMarkets[replies] = qnam.get(QNetworkRequest(urlTennisMarkets));
-        connect(replyTennisMarkets[replies], SIGNAL(finished()), this, SLOT(httpTennisMarketsFinished()));
+        replyTennisMarkets.append(qnam.get(QNetworkRequest(urlTennisMarkets)));
+        connect(replyTennisMarkets.last(), SIGNAL(finished()), this, SLOT(httpTennisMarketsFinished()));
 
     }
 }
@@ -223,7 +220,6 @@ void HttpWindow::httpTennisHighlightsFinished()
         if (i >= marketIds.count())
         {
             ui->tableWidget->item(row, 2)->setBackgroundColor(QColor(255, 0, 0));
-//          row--;
             deleted++;
         }
     }
@@ -232,7 +228,6 @@ void HttpWindow::httpTennisHighlightsFinished()
 
     ui->tableWidget->sortByColumn(1, Qt::AscendingOrder);
     ui->tableWidget->resizeColumnsToContents();
-//  ui->tableWidget->resizeRowsToContents();
 
     QTimer::singleShot(0, this, SLOT(resizeWindow()));
 
@@ -277,11 +272,11 @@ void HttpWindow::resizeWindow()
 
 void HttpWindow::httpTennisMarketsFinished()
 {
-    QJsonDocument   json;
-    QJsonParseError error;
+    QJsonDocument    json;
+    QJsonParseError  error;
     QTableWidgetItem *item;
-    int i;
-    static int count = 0;
+    QNetworkReply    *reply = NULL;
+    static int       count  = 0;
 
     for (int row = 0; row < ui->tableWidget->rowCount(); row++)
     {
@@ -296,13 +291,23 @@ void HttpWindow::httpTennisMarketsFinished()
         }
     }
 
-    for (i = 0; i < 16; i++)
+    for (QList<QNetworkReply *>::iterator i = replyTennisMarkets.begin(); i != replyTennisMarkets.end(); i++)
     {
-        if (replyTennisMarkets[i] && replyTennisMarkets[i]->isFinished())
+        if ((*i)->isFinished())
+        {
+            reply = *i;
+            replyTennisMarkets.erase(i);
             break;
+        }
     }
 
-    json = QJsonDocument::fromJson(replyTennisMarkets[i]->readAll(), &error);
+    if (reply == NULL)
+    {
+        qDebug() << "We hebben een probleem...";
+        return;
+    }
+
+    json = QJsonDocument::fromJson(reply->readAll(), &error);
 
     QString ww("tennis_markets");
     ww.append(QString("_%1").arg(count++));
@@ -431,11 +436,9 @@ void HttpWindow::httpTennisMarketsFinished()
     }
 
     ui->tableWidget->resizeColumnsToContents();
-//  ui->tableWidget->resizeRowsToContents();
     QTimer::singleShot(0, this, SLOT(resizeWindow()));
 
-    replyTennisMarkets[i]->deleteLater();
-    replyTennisMarkets[i] = NULL;
+    reply->deleteLater();
 }
 
 void HttpWindow::sslErrors(QNetworkReply *, const QList<QSslError> &errors)

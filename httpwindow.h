@@ -90,7 +90,7 @@ private:
     QNetworkAccessManager qnam;
     QNetworkReply *replyTennisHighlights;
     int replies;
-    QNetworkReply *replyTennisMarkets[16];
+    QList<QNetworkReply *>replyTennisMarkets;
     QNetworkReply *replyPokerStars;
 
     QStringList marketIds;
