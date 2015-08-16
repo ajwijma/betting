@@ -77,7 +77,7 @@ void HttpWindow::timerAction()
     if (--m_iTennisMarketsTimeout <= 0)
     {
         downloadTennisMarkets();
-        m_iTennisMarketsTimeout = 1; // 5;
+        m_iTennisMarketsTimeout = 5;
     }
 
     if (--m_iTennisHighlightsTimeout <= 0)
