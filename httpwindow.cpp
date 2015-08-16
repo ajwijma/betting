@@ -52,7 +52,8 @@ HttpWindow::HttpWindow(QWidget *parent) : QDialog(parent), ui(new Ui::Dialog)
     urlTennisMarketsBase = "https://uk-api.betfair.com/www/sports/exchange/readonly/v1.0/bymarket?currencyCode=EUR&alt=json&locale=en_GB&types=MARKET_STATE%2CMARKET_RATES%2CMARKET_DESCRIPTION%2CEVENT%2CRUNNER_DESCRIPTION%2CRUNNER_STATE%2CRUNNER_EXCHANGE_PRICES_BEST%2CRUNNER_METADATA&marketIds=";
 
     ui->tableWidget->setColumnCount(12);
-//  ui->tableWidget->setColumnHidden(0, true);
+    ui->tableWidget->setColumnHidden(0, true);
+    ui->tableWidget->setColumnHidden(1, true);
 
     m_iTennisHighlightsTimeout = 1;
     m_iTennisMarketsTimeout    = 6;
@@ -76,7 +77,7 @@ void HttpWindow::timerAction()
     if (--m_iTennisMarketsTimeout <= 0)
     {
         downloadTennisMarkets();
-        m_iTennisMarketsTimeout = 5;
+        m_iTennisMarketsTimeout = 1; // 5;
     }
 
     if (--m_iTennisHighlightsTimeout <= 0)
@@ -461,7 +462,7 @@ void HttpWindow::sslErrors(QNetworkReply *, const QList<QSslError> &errors)
 
 void HttpWindow::pokerStars()
 {
-    urlPokerStars = "https://sports.pokerstars.eu/sportsbook/v1/api/getSportSchedule?sport=TENNIS&marketTypes=AB&days=0&embedComps=true&maxPrematch=0&maxInplay=20&topupInplay=false&channelId=6&locale=en-gb";
+    urlPokerStars = "https://sports.pokerstars.eu//sportsbook/v1/api/getSportSchedule?sport=TENNIS&marketTypes=AB&days=0%2C1%2C2%2C3%2C4&embedComps=false&maxPrematch=20&maxInplay=20&topupInplay=true&channelId=6&locale=en-gb";
 
     replyPokerStars = qnam.get(QNetworkRequest(urlPokerStars));
 
