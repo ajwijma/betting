@@ -463,7 +463,7 @@ void HttpWindow::sslErrors(QNetworkReply *, const QList<QSslError> &errors)
 void HttpWindow::pokerStars()
 {
     urlPokerStars = "https://sports.pokerstars.eu//sportsbook/v1/api/getSportSchedule?sport=TENNIS&marketTypes=AB&days=0%2C1%2C2%2C3%2C4&embedComps=false&maxPrematch=20&maxInplay=20&topupInplay=true&channelId=6&locale=en-gb";
-
+//  "{\"UpdateSubcriptions\":{\"snapshotResponse\":true,\"toAdd\":[{\"name\":\"eventSummaries\",\"ids\":\"2854743\"},{\"name\":\"marketTypes\",\"ids\":\"AB\"},{\"name\":\"schedule\",\"ids\":\"tennis\"}]}}"
     replyPokerStars = qnam.get(QNetworkRequest(urlPokerStars));
 
     connect(replyPokerStars, SIGNAL(finished()), this, SLOT(httpPokerStarsFinished()));
