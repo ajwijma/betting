@@ -52,17 +52,22 @@ HttpWindow::HttpWindow(QWidget *parent) : QDialog(parent), ui(new Ui::Dialog)
     urlTennisMarketsBase = "https://uk-api.betfair.com/www/sports/exchange/readonly/v1.0/bymarket?currencyCode=EUR&alt=json&locale=en_GB&types=MARKET_STATE%2CMARKET_RATES%2CMARKET_DESCRIPTION%2CEVENT%2CRUNNER_DESCRIPTION%2CRUNNER_STATE%2CRUNNER_EXCHANGE_PRICES_BEST%2CRUNNER_METADATA&marketIds=";
 
     ui->tableWidget->setColumnCount(12);
-    ui->tableWidget->setColumnHidden(0, true);
-    ui->tableWidget->setColumnHidden(1, true);
+//  ui->tableWidget->setColumnHidden(0, true);
+//  ui->tableWidget->setColumnHidden(1, true);
 
     m_iTennisHighlightsTimeout = 1;
     m_iTennisMarketsTimeout    = 6;
     timer = new QTimer;
     timer->setInterval(1000);
 
+    keepAlive = new QTimer;
+    keepAlive->setInterval(10000);
+
     connect(ui->pushButtonBetfair, SIGNAL(clicked()), timer, SLOT(start()));
     connect(ui->pushButtonPokerStars, SIGNAL(clicked()), this, SLOT(pokerStars()));
     connect(timer, SIGNAL(timeout()), this, SLOT(timerAction()));
+
+    connect(keepAlive, SIGNAL(timeout()), this, SLOT(sendKeepAlive()));
 
     connect(&qnam, SIGNAL(sslErrors(QNetworkReply *, QList<QSslError>)), this, SLOT(sslErrors(QNetworkReply *, QList<QSslError>)));
 }
@@ -479,11 +484,18 @@ void HttpWindow::onConnected()
     qDebug() << "WebSocket connected";
     connect(&webSocket, SIGNAL(textMessageReceived(const QString &)), this, SLOT(onTextMessageReceived(const QString &)));
     webSocket.sendTextMessage(QStringLiteral("{\"PublicLoginRequest\":{\"application\":\"web-sportsbook\",\"locale\":\"en-gb\",\"channel\":\"INTERNET\",\"apiVersion\":2,\"reqId\":0}}"));
+
+    keepAlive->start();
 }
 
 void HttpWindow::onTextMessageReceived(const QString &message)
 {
     qDebug() << "Message received:" << message;
+}
+
+void HttpWindow::sendKeepAlive()
+{
+    webSocket.sendTextMessage("{KeepAlive:{reqId:1}}");
 }
 
 void HttpWindow::onSslErrors(const QList<QSslError> &errors)
@@ -503,10 +515,122 @@ void HttpWindow::httpPokerStarsFinished()
 {
     QJsonDocument   json;
     QJsonParseError error;
+    QJsonObject     object;
+    QJsonArray      inPlay, preMatch;
+    int             added = 0, deleted = 0;
 
     json = QJsonDocument::fromJson(replyPokerStars->readAll(), &error);
+
     QFile qq("pokerstars.txt");
     qq.open(QIODevice::WriteOnly | QIODevice::Text);
     qq.write(json.toJson());
     qq.close();
+
+    object = json.object().value("Sport").toObject();
+    inPlay = object.value("inplay").toObject().value("event").toArray();
+    preMatch = object.value("prematch").toObject().value("event").toArray();
+
+    eventIds.clear();
+    for (QJsonArray::const_iterator i = inPlay.begin(); i != inPlay.end(); i++)
+    {
+        QString eventId;
+        int     row;
+
+        qDebug() << QString::number(i->toObject().value("eventTime").toDouble(), 'f', 0) << i->toObject().value("name").toString();
+
+        eventId = QString::number(i->toObject().value("id").toDouble(), 'f', 0);
+        eventIds.append(eventId);
+
+        for (row = 0; row < ui->tableWidget->rowCount(); row++)
+        {
+            if (ui->tableWidget->item(row, 0)->text() == eventId)
+                break;
+        }
+        if (row < ui->tableWidget->rowCount())
+        {
+            if (QString::number(i->toObject().value("eventTime").toDouble(), 'f', 0) != ui->tableWidget->item(row, 1)->text())
+                qDebug() << "eventTime has changed...";
+            continue;
+        }
+        else
+        {
+            ui->tableWidget->insertRow(row);
+            ui->tableWidget->setItem(row, 0, new QTableWidgetItem(QString::number(i->toObject().value("id").toDouble(), 'f', 0)));
+            ui->tableWidget->setItem(row, 1, new QTableWidgetItem(QString::number(i->toObject().value("eventTime").toDouble(), 'f', 0)));
+            ui->tableWidget->setItem(row, 2, new QTableWidgetItem(i->toObject().value("name").toString()));
+            added++;
+        }
+    }
+
+    for (QJsonArray::const_iterator i = preMatch.begin(); i != preMatch.end(); i++)
+    {
+        QString eventId;
+        int     row;
+
+        qDebug() << QString::number(i->toObject().value("eventTime").toDouble(), 'f', 0) << i->toObject().value("name").toString();
+
+        eventId = QString::number(i->toObject().value("id").toDouble(), 'f', 0);
+        eventIds.append(eventId);
+
+        for (row = 0; row < ui->tableWidget->rowCount(); row++)
+        {
+            if (ui->tableWidget->item(row, 0)->text() == eventId)
+                break;
+        }
+        if (row < ui->tableWidget->rowCount())
+        {
+            if (QString::number(i->toObject().value("eventTime").toDouble(), 'f', 0) != ui->tableWidget->item(row, 1)->text())
+                qDebug() << "eventTime has changed...";
+            continue;
+        }
+        else
+        {
+            ui->tableWidget->insertRow(row);
+            ui->tableWidget->setItem(row, 0, new QTableWidgetItem(QString::number(i->toObject().value("id").toDouble(), 'f', 0)));
+            ui->tableWidget->setItem(row, 1, new QTableWidgetItem(QString::number(i->toObject().value("eventTime").toDouble(), 'f', 0)));
+            ui->tableWidget->setItem(row, 2, new QTableWidgetItem(i->toObject().value("name").toString()));
+            added++;
+        }
+    }
+
+    for (int row = 0; row < ui->tableWidget->rowCount(); row++)
+    {
+        int i;
+
+        for (i = 0; i < eventIds.count(); i++)
+        {
+            if (eventIds[i] == ui->tableWidget->item(row, 0)->text())
+                break;
+        }
+        if (i >= eventIds.count())
+        {
+            ui->tableWidget->item(row, 2)->setBackgroundColor(QColor(255, 0, 0));
+            deleted++;
+        }
+    }
+
+    qDebug() << eventIds.count() << ui->tableWidget->rowCount() << added << deleted;
+
+    ui->tableWidget->sortByColumn(1, Qt::AscendingOrder);
+    ui->tableWidget->resizeColumnsToContents();
+
+    QTimer::singleShot(0, this, SLOT(resizeWindow()));
+
+    replyPokerStars->deleteLater();
+    replyPokerStars = NULL;
+
+    QTimer::singleShot(5000, this, SLOT(subscribe()));
+}
+
+void HttpWindow::subscribe()
+{
+    QString subscribeA = "{\"UpdateSubcriptions\":{\"snapshotResponse\":true,\"toAdd\":[{\"name\":\"eventSummaries\",\"ids\":\"";
+    QString subscribeB = "\"},{\"name\":\"marketTypes\",\"ids\":\"AB\"},{\"name\":\"schedule\",\"ids\":\"tennis\"}]}}";
+
+    for (int i = 0; i < eventIds.count(); i++)
+    {
+        QString subscribeC = subscribeA + eventIds[i] + subscribeB;
+
+        webSocket.sendTextMessage(subscribeC);
+    }
 }

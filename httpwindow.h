@@ -67,6 +67,7 @@ public:
 
 private slots:
     void timerAction();
+    void sendKeepAlive();
     void downloadTennisHighlights();
     void downloadTennisMarkets();
     void httpTennisHighlightsFinished();
@@ -78,6 +79,7 @@ private slots:
     void onTextMessageReceived(const QString &message);
     void onSslErrors(const QList<QSslError> &errors);
     void resizeWindow();
+    void subscribe();
 
 private:
     Ui::Dialog *ui;
@@ -94,8 +96,10 @@ private:
     QNetworkReply *replyPokerStars;
 
     QStringList marketIds;
+    QStringList eventIds;
 
     QTimer *timer;
+    QTimer *keepAlive;
     int m_iTennisHighlightsTimeout;
     int m_iTennisMarketsTimeout;
 
