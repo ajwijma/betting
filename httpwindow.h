@@ -80,6 +80,7 @@ private slots:
     void onSslErrors(const QList<QSslError> &errors);
     void resizeWindow();
     void subscribe();
+    void onError();
 
 private:
     Ui::Dialog *ui;

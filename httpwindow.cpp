@@ -475,8 +475,14 @@ void HttpWindow::pokerStars()
 
     connect(&webSocket, SIGNAL(connected()), this, SLOT(onConnected()));
     connect(&webSocket, SIGNAL(sslErrors(const QList<QSslError> &)), this, SLOT(onSslErrors(const QList<QSslError> &)));
+    connect(&webSocket, SIGNAL(error(QAbstractSocket::SocketError)), this, SLOT(osError()));
 
     webSocket.open(QUrl(QStringLiteral("wss://sports.pokerstars.eu/websocket")));
+}
+
+void HttpWindow::onError()
+{
+    qDebug() << "onError";
 }
 
 void HttpWindow::onConnected()
@@ -490,7 +496,79 @@ void HttpWindow::onConnected()
 
 void HttpWindow::onTextMessageReceived(const QString &message)
 {
+    QJsonDocument   json;
+    QJsonParseError error;
+    QJsonValue      value;
+
     qDebug() << "Message received:" << message;
+
+    json = QJsonDocument::fromJson(message.toUtf8(), &error);
+    if (error.error)
+        qDebug() << error.error << error.errorString();
+
+    qDebug() << endl << json << endl;
+
+    value = json.object().value("PushMsg");
+    if (value.isUndefined())
+        return;
+
+    value = value.toObject().value("eventTradingState");
+    if (value.isUndefined())
+        return;
+
+    if (value.toObject().value("prices").isUndefined())
+        return;
+    if (value.toObject().value("prices").toObject().value("market").isUndefined())
+        return;
+    if (value.toObject().value("prices").toObject().value("market").toArray()[0].toObject().value("channel").isUndefined())
+        return;
+    if (value.toObject().value("prices").toObject().value("market").toArray()[0].toObject().value("channel").toArray()[0].toObject().value("selection").isUndefined())
+        return;
+    if (value.toObject().value("prices").toObject().value("market").toArray()[0].toObject().value("channel").toArray()[0].toObject().value("selection").toArray()[0].toObject().value("rootIdx").isUndefined())
+        return;
+
+    if (value.isObject())
+    {
+        QString          eventId;
+        int              row;
+        QJsonArray       selection;
+        double           priceA, priceB;
+        QTableWidgetItem *item;
+
+        eventId = QString::number(value.toObject().value("id").toDouble(), 'f', 0);
+
+        for (row = 0; row < ui->tableWidget->rowCount(); row++)
+        {
+            if (ui->tableWidget->item(row, 0)->text() == eventId)
+                break;
+        }
+        if (row == ui->tableWidget->rowCount())
+        {
+            qDebug() << "Hmm, eventId waar we niet om gevraagd hebben...";
+            return;
+        }
+
+        selection = value.toObject().value("prices").toObject().value("market").toArray()[0].toObject().value("channel").toArray()[0].toObject().value("selection").toArray();
+        qDebug() << selection.count();
+        priceA = 100.0 / selection[0].toObject().value("rootIdx").toDouble();
+        priceB = 100.0 / selection[1].toObject().value("rootIdx").toDouble();
+
+        item = ui->tableWidget->item(row, 5);
+        if (item == 0)
+        {
+            item = new QTableWidgetItem;
+            ui->tableWidget->setItem(row, 5, item);
+        }
+        item->setText(QString::number(priceA, 'f', 2));
+
+        item = ui->tableWidget->item(row, 7);
+        if (item == 0)
+        {
+            item = new QTableWidgetItem;
+            ui->tableWidget->setItem(row, 7, item);
+        }
+        item->setText(QString::number(priceB, 'f', 2));
+    }
 }
 
 void HttpWindow::sendKeepAlive()
