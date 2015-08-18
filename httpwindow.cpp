@@ -586,8 +586,16 @@ void HttpWindow::onTextMessageReceived(const QString &message)
 
         selection = value.toObject().value("prices").toObject().value("market").toArray()[0].toObject().value("channel").toArray()[0].toObject().value("selection").toArray();
 //      qDebug() << selection.count();
-        idxB = (int)selection[0].toObject().value("rootIdx").toDouble(); // waarom omgekeerd
-        idxA = (int)selection[1].toObject().value("rootIdx").toDouble(); // weet ik nog niet
+        if (selection[0].toObject().value("type").toString() == "playerA")
+        {
+            idxA = (int)selection[0].toObject().value("rootIdx").toDouble();
+            idxB = (int)selection[1].toObject().value("rootIdx").toDouble();
+        }
+        else
+        {
+            idxA = (int)selection[1].toObject().value("rootIdx").toDouble();
+            idxB = (int)selection[0].toObject().value("rootIdx").toDouble();
+        }
         priceA = rootLadder[idxA];
         priceB = rootLadder[idxB];
 
