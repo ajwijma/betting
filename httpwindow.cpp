@@ -37,6 +37,7 @@
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
+#include <algorithm>
 
 #include <QtWidgets>
 #include <QtNetwork>
@@ -55,8 +56,13 @@ HttpWindow::HttpWindow(QWidget *parent) : QDialog(parent), ui(new Ui::Dialog)
     ui->tableWidget->setColumnCount(24);
     ui->tableWidget->setColumnHidden(0, true);
     ui->tableWidget->setColumnHidden(1, true);
+//  ui->tableWidget->setColumnHidden(3, true);
+//  ui->tableWidget->setColumnHidden(4, true);
+//  ui->tableWidget->setColumnHidden(8, true);
+//  ui->tableWidget->setColumnHidden(9, true);
     ui->tableWidget->setColumnHidden(pokerStarsOffset + 0, true);
     ui->tableWidget->setColumnHidden(pokerStarsOffset + 1, true);
+//  ui->tableWidget->setColumnHidden(pokerStarsOffset + 2, true);
 
     m_iTennisHighlightsTimeout = 1;
     m_iTennisMarketsTimeout    = 6;
@@ -949,26 +955,26 @@ void HttpWindow::arbitrage()
         for (int col = 3; col < 6; col++)
         {
             if (ui->tableWidget->item(row, col))
-                maxAbetfair = __max(maxAbetfair, ui->tableWidget->item(row, col)->text().toDouble());
+                maxAbetfair = std::max(maxAbetfair, ui->tableWidget->item(row, col)->text().toDouble());
         }
         for (int col = 7; col < 10; col++)
         {
             if (ui->tableWidget->item(row, col))
-                maxBbetfair = __max(maxBbetfair, ui->tableWidget->item(row, col)->text().toDouble());
+                maxBbetfair = std::max(maxBbetfair, ui->tableWidget->item(row, col)->text().toDouble());
         }
         for (int col = 16; col < 17; col++)
         {
             if (ui->tableWidget->item(row, col))
-                maxApokerstars = __max(maxApokerstars, ui->tableWidget->item(row, col)->text().toDouble());
+                maxApokerstars = std::max(maxApokerstars, ui->tableWidget->item(row, col)->text().toDouble());
         }
         for (int col = 18; col < 19; col++)
         {
             if (ui->tableWidget->item(row, col))
-                maxBpokerstars = __max(maxBpokerstars, ui->tableWidget->item(row, col)->text().toDouble());
+                maxBpokerstars = std::max(maxBpokerstars, ui->tableWidget->item(row, col)->text().toDouble());
         }
 
         if (maxAbetfair > 0.0 && maxBbetfair > 0.0 && maxApokerstars > 0.0 && maxBpokerstars > 0.0)
-            marketPercentage = 100.0 / __max(maxAbetfair, maxApokerstars) + 100.0 / __max(maxBbetfair, maxBpokerstars);
+            marketPercentage = 100.0 / std::max(maxAbetfair, maxApokerstars) + 100.0 / std::max(maxBbetfair, maxBpokerstars);
 
         QTableWidgetItem *item = ui->tableWidget->item(row, 22);
         if (item == NULL)
@@ -991,8 +997,8 @@ void HttpWindow::arbitrage()
                     i = new QTableWidgetItem;
                     ui->tableWidget->setItem(row, 23, i);
                 }
-                double a = __max(maxAbetfair, maxApokerstars);
-                double b = __max(maxBbetfair, maxBpokerstars);
+                double a = std::max(maxAbetfair, maxApokerstars);
+                double b = std::max(maxBbetfair, maxBpokerstars);
                 i->setText(QString::number((a * b - a - b) / (a + 1), 'f', 2));
             }
             else
