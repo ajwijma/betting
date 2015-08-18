@@ -68,14 +68,14 @@ public:
 private slots:
     void onBetfairTimeout();
     void onPokerStarsTimeout();
-    void downloadTennisHighlights();
-    void downloadTennisMarkets();
+    void downloadBetfairTennisHighlights();
+    void downloadBetfairTennisMarkets();
     void httpBetfairTennisHighlightsFinished();
     void httpBetfairTennisMarketsFinished();
     void httpPokerStarsTennisHighlightsFinished();
     void httpPokerStarsRootLadderFinished();
     void sslErrors(QNetworkReply *, const QList<QSslError> &errors);
-    void pokerStars();
+    void downloadPokerStars();
     void onConnected();
     void onTextFrameReceived(const QString &frame, bool last);
     void onTextMessageReceived(const QString &message);
@@ -85,6 +85,8 @@ private slots:
     void onColorTimeout();
 
 private:
+    void arbitrage();
+
     Ui::Dialog *ui;
     QString urlTennisHighlights;
     QString urlTennisMarketsBase;
@@ -113,6 +115,8 @@ private:
     QTimer *colorTimer;
 
     QWebSocket webSocket;
+
+    int pokerStarsOffset;
 };
 
 #endif

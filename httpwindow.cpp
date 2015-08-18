@@ -51,9 +51,12 @@ HttpWindow::HttpWindow(QWidget *parent) : QDialog(parent), ui(new Ui::Dialog)
     urlTennisHighlights  = "https://www.betfair.com/exchange/tennis?modules=tennishighlights&container=false&isAjax=true&eventTypeId=undefined&alt=json";
     urlTennisMarketsBase = "https://uk-api.betfair.com/www/sports/exchange/readonly/v1.0/bymarket?currencyCode=EUR&alt=json&locale=en_GB&types=MARKET_STATE%2CMARKET_RATES%2CMARKET_DESCRIPTION%2CEVENT%2CRUNNER_DESCRIPTION%2CRUNNER_STATE%2CRUNNER_EXCHANGE_PRICES_BEST%2CRUNNER_METADATA&marketIds=";
 
-    ui->tableWidget->setColumnCount(12);
-//  ui->tableWidget->setColumnHidden(0, true);
-//  ui->tableWidget->setColumnHidden(1, true);
+    pokerStarsOffset = 13;
+    ui->tableWidget->setColumnCount(24);
+    ui->tableWidget->setColumnHidden(0, true);
+    ui->tableWidget->setColumnHidden(1, true);
+    ui->tableWidget->setColumnHidden(pokerStarsOffset + 0, true);
+    ui->tableWidget->setColumnHidden(pokerStarsOffset + 1, true);
 
     m_iTennisHighlightsTimeout = 1;
     m_iTennisMarketsTimeout    = 6;
@@ -71,9 +74,14 @@ HttpWindow::HttpWindow(QWidget *parent) : QDialog(parent), ui(new Ui::Dialog)
     connect(colorTimer, SIGNAL(timeout()), this, SLOT(onColorTimeout()));
 
     connect(ui->pushButtonBetfair, SIGNAL(clicked()), betfairTimer, SLOT(start()));
-    connect(ui->pushButtonPokerStars, SIGNAL(clicked()), this, SLOT(pokerStars()));
+    connect(ui->pushButtonPokerStars, SIGNAL(clicked()), this, SLOT(downloadPokerStars()));
 
     connect(&qnam, SIGNAL(sslErrors(QNetworkReply *, QList<QSslError>)), this, SLOT(sslErrors(QNetworkReply *, QList<QSslError>)));
+
+    ui->pushButtonPokerStars->setDisabled(true);
+
+    ui->tableWidget->resizeColumnsToContents();
+    QTimer::singleShot(0, this, SLOT(resizeWindow()));
 }
 
 HttpWindow::~HttpWindow()
@@ -85,25 +93,28 @@ void HttpWindow::onBetfairTimeout()
 {
     if (--m_iTennisMarketsTimeout <= 0)
     {
-        downloadTennisMarkets();
-        m_iTennisMarketsTimeout = 5;
+        downloadBetfairTennisMarkets();
+        m_iTennisMarketsTimeout = 1;
     }
 
     if (--m_iTennisHighlightsTimeout <= 0)
     {
-        downloadTennisHighlights();
-        m_iTennisHighlightsTimeout = 60;
+        downloadBetfairTennisHighlights();
+        m_iTennisHighlightsTimeout = INT_MAX; // 60;
     }
 }
 
-void HttpWindow::downloadTennisHighlights()
+void HttpWindow::downloadBetfairTennisHighlights()
 {
+    ui->pushButtonBetfair->setDisabled(true);
+    ui->pushButtonPokerStars->setDisabled(false);
+
     replyTennisHighlights = qnam.get(QNetworkRequest(urlTennisHighlights));
 
     connect(replyTennisHighlights, SIGNAL(finished()), this, SLOT(httpBetfairTennisHighlightsFinished()));
 }
 
-void HttpWindow::downloadTennisMarkets()
+void HttpWindow::downloadBetfairTennisMarkets()
 {
     int count = 0;
 
@@ -199,10 +210,12 @@ void HttpWindow::httpBetfairTennisHighlightsFinished()
         marketIds.append(marketId);
         for (row = 0; row < ui->tableWidget->rowCount(); row++)
         {
+            if (ui->tableWidget->item(row, 0) == NULL)
+                break;
             if (ui->tableWidget->item(row, 0)->text() == marketId)
                 break;
         }
-        if (row < ui->tableWidget->rowCount())
+        if (row < ui->tableWidget->rowCount() && ui->tableWidget->item(row, 0))
         {
             if (QString::number(i->toObject().value("marketTime").toDouble(), 'f', 0) != ui->tableWidget->item(row, 1)->text())
                     qDebug() << "marketTime has changed...";
@@ -210,7 +223,8 @@ void HttpWindow::httpBetfairTennisHighlightsFinished()
         }
         else
         {
-            ui->tableWidget->insertRow(row);
+            if (row == ui->tableWidget->rowCount())
+                ui->tableWidget->insertRow(row);
             ui->tableWidget->setItem(row, 0, new QTableWidgetItem(i->toObject().value("marketId").toString()));
             ui->tableWidget->setItem(row, 1, new QTableWidgetItem(QString::number(i->toObject().value("marketTime").toDouble(), 'f', 0)));
             ui->tableWidget->setItem(row, 2, new QTableWidgetItem(i->toObject().value("eventName").toString()));
@@ -224,10 +238,12 @@ void HttpWindow::httpBetfairTennisHighlightsFinished()
         int i;
         for (i = 0; i < marketIds.count(); i++)
         {
+            if (ui->tableWidget->item(row, 0) == NULL)
+                break;
             if (marketIds[i] == ui->tableWidget->item(row, 0)->text())
                 break;
         }
-        if (i >= marketIds.count())
+        if (i >= marketIds.count() && ui->tableWidget->item(row, 2))
         {
             ui->tableWidget->item(row, 2)->setBackgroundColor(QColor(255, 0, 0));
             deleted++;
@@ -328,12 +344,12 @@ void HttpWindow::httpBetfairTennisMarketsFinished()
 
         for (row = 0; row < ui->tableWidget->rowCount(); row++)
         {
-            if (ui->tableWidget->item(row, 0)->text() == marketId)
-            {
+            if (ui->tableWidget->item(row, 0) == NULL)
                 break;
-            }
+            if (ui->tableWidget->item(row, 0)->text() == marketId)
+                break;
         }
-        if (row == ui->tableWidget->rowCount())
+        if (row == ui->tableWidget->rowCount() || ui->tableWidget->item(row, 0) == NULL)
             continue;
 
         b = a[0].toObject().value("runners").toArray();
@@ -448,6 +464,8 @@ void HttpWindow::httpBetfairTennisMarketsFinished()
     QTimer::singleShot(0, this, SLOT(resizeWindow()));
 
     reply->deleteLater();
+
+    arbitrage();
 }
 
 void HttpWindow::sslErrors(QNetworkReply *, const QList<QSslError> &errors)
@@ -468,15 +486,15 @@ void HttpWindow::sslErrors(QNetworkReply *, const QList<QSslError> &errors)
     }
 }
 
-void HttpWindow::pokerStars()
+void HttpWindow::downloadPokerStars()
 {
+    ui->pushButtonPokerStars->setDisabled(true);
+
     connect(&webSocket, SIGNAL(connected()), this, SLOT(onConnected()));
     connect(&webSocket, SIGNAL(sslErrors(const QList<QSslError> &)), this, SLOT(onSslErrors(const QList<QSslError> &)));
     connect(&webSocket, SIGNAL(error(QAbstractSocket::SocketError)), this, SLOT(onError()));
 
     webSocket.open(QUrl(QStringLiteral("wss://sports.pokerstars.eu/websocket")));
-
-
 }
 
 void HttpWindow::onError()
@@ -575,7 +593,9 @@ void HttpWindow::onTextMessageReceived(const QString &message)
 
         for (row = 0; row < ui->tableWidget->rowCount(); row++)
         {
-            if (ui->tableWidget->item(row, 0)->text() == eventId)
+            if (ui->tableWidget->item(row, pokerStarsOffset + 0) == NULL)
+                continue;
+            if (ui->tableWidget->item(row, pokerStarsOffset + 0)->text() == eventId)
                 break;
         }
         if (row == ui->tableWidget->rowCount())
@@ -600,22 +620,22 @@ void HttpWindow::onTextMessageReceived(const QString &message)
         priceB = rootLadder[idxB];
 
         text = QString::number(priceA, 'f', 2);
-        item = ui->tableWidget->item(row, 5);
+        item = ui->tableWidget->item(row, pokerStarsOffset + 3);
         if (item == 0)
         {
             item = new QTableWidgetItem;
-            ui->tableWidget->setItem(row, 5, item);
+            ui->tableWidget->setItem(row, pokerStarsOffset + 3, item);
         }
         if (text != item->text())
             item->setBackgroundColor(QColor(0, 255, 0));
         item->setText(text);
 
         text = QString::number(priceB, 'f', 2);
-        item = ui->tableWidget->item(row, 7);
+        item = ui->tableWidget->item(row, pokerStarsOffset + 5);
         if (item == 0)
         {
             item = new QTableWidgetItem;
-            ui->tableWidget->setItem(row, 7, item);
+            ui->tableWidget->setItem(row, pokerStarsOffset + 5, item);
             item->setBackgroundColor(QColor(0, 255, 0));
         }
         if (text != item->text())
@@ -623,17 +643,19 @@ void HttpWindow::onTextMessageReceived(const QString &message)
         item->setText(text);
 
         text = QString::number(100.0 / priceA + 100.0 / priceB, 'f', 2);
-        item = ui->tableWidget->item(row, 11);
+        item = ui->tableWidget->item(row, pokerStarsOffset + 7);
         if (item == 0)
         {
             item = new QTableWidgetItem;
-            ui->tableWidget->setItem(row, 11, item);
+            ui->tableWidget->setItem(row, pokerStarsOffset + 7, item);
             item->setBackgroundColor(QColor(0, 255, 0));
         }
         if (text != item->text())
             item->setBackgroundColor(QColor(0, 255, 0));
         item->setText(text);
     }
+
+    arbitrage();
 
     ui->tableWidget->resizeColumnsToContents();
 }
@@ -728,62 +750,103 @@ void HttpWindow::httpPokerStarsTennisHighlightsFinished()
     eventIds.clear();
     for (QJsonArray::const_iterator i = inPlay.begin(); i != inPlay.end(); i++)
     {
-        QString eventId;
+        QString eventId, name, left, right;
         int     row;
 
-        qDebug() << QString::number(i->toObject().value("eventTime").toDouble(), 'f', 0) << i->toObject().value("name").toString();
+//      qDebug() << QString::number(i->toObject().value("eventTime").toDouble(), 'f', 0) << i->toObject().value("name").toString();
+
+        name = i->toObject().value("name").toString();
+//      if (name.contains('/')) // geen dubbelspel
+//          continue;
+
+        left = name.left(name.indexOf(','));
+        right = name.mid(name.indexOf(" vs ") + 4);
+        right = right.left(right.indexOf(','));
+        qDebug() << left << right << name;
 
         eventId = QString::number(i->toObject().value("id").toDouble(), 'f', 0);
         eventIds.append(eventId);
 
         for (row = 0; row < ui->tableWidget->rowCount(); row++)
         {
-            if (ui->tableWidget->item(row, 0)->text() == eventId)
+/*
+            if (ui->tableWidget->item(row, m_pokerStarsOffset + 0) == NULL)
+                break;
+            if (ui->tableWidget->item(row, m_pokerStarsOffset + 0)->text() == eventId)
+                break;
+*/
+            if (ui->tableWidget->item(row, 2) == NULL)
+                break;
+            if (ui->tableWidget->item(row, 2)->text().contains(left) && ui->tableWidget->item(row, 2)->text().contains(right))
                 break;
         }
-        if (row < ui->tableWidget->rowCount())
-        {
-            if (QString::number(i->toObject().value("eventTime").toDouble(), 'f', 0) != ui->tableWidget->item(row, 1)->text())
+        if (row < ui->tableWidget->rowCount() && ui->tableWidget->item(row, 2) && ui->tableWidget->item(row, pokerStarsOffset + 1))
+        {    
+            if (QString::number(i->toObject().value("eventTime").toDouble(), 'f', 0) != ui->tableWidget->item(row, pokerStarsOffset + 1)->text())
                 qDebug() << "eventTime has changed...";
             continue;
         }
         else
         {
-            ui->tableWidget->insertRow(row);
-            ui->tableWidget->setItem(row, 0, new QTableWidgetItem(QString::number(i->toObject().value("id").toDouble(), 'f', 0)));
-            ui->tableWidget->setItem(row, 1, new QTableWidgetItem(QString::number(i->toObject().value("eventTime").toDouble(), 'f', 0)));
-            ui->tableWidget->setItem(row, 2, new QTableWidgetItem(i->toObject().value("name").toString()));
+            if (row == ui->tableWidget->rowCount())
+            {
+                ui->tableWidget->insertRow(row);
+                ui->tableWidget->hideRow(row);
+            }
+            ui->tableWidget->setItem(row, pokerStarsOffset + 0, new QTableWidgetItem(eventId));
+            ui->tableWidget->setItem(row, pokerStarsOffset + 1, new QTableWidgetItem(QString::number(i->toObject().value("eventTime").toDouble(), 'f', 0)));
+            ui->tableWidget->setItem(row, pokerStarsOffset + 2, new QTableWidgetItem(name));
             added++;
         }
     }
 
     for (QJsonArray::const_iterator i = preMatch.begin(); i != preMatch.end(); i++)
     {
-        QString eventId;
+        QString eventId, name, left, right;
         int     row;
 
-        qDebug() << QString::number(i->toObject().value("eventTime").toDouble(), 'f', 0) << i->toObject().value("name").toString();
+//      qDebug() << QString::number(i->toObject().value("eventTime").toDouble(), 'f', 0) << i->toObject().value("name").toString();
+
+        name = i->toObject().value("name").toString();
+//      if (name.contains('/')) // geen dubbelspel
+//          continue;
+
+        left = name.left(name.indexOf(','));
+        right = name.mid(name.indexOf(" vs ") + 4);
+        right = right.left(right.indexOf(','));
 
         eventId = QString::number(i->toObject().value("id").toDouble(), 'f', 0);
         eventIds.append(eventId);
 
         for (row = 0; row < ui->tableWidget->rowCount(); row++)
         {
-            if (ui->tableWidget->item(row, 0)->text() == eventId)
+/*
+            if (ui->tableWidget->item(row, m_pokerStarsOffset + 0) == NULL)
+                break;
+            if (ui->tableWidget->item(row, m_pokerStarsOffset + 0)->text() == eventId)
+                break;
+*/
+            if (ui->tableWidget->item(row, 2) == NULL)
+                break;
+            if (ui->tableWidget->item(row, 2)->text().contains(left) && ui->tableWidget->item(row, 2)->text().contains(right))
                 break;
         }
-        if (row < ui->tableWidget->rowCount())
+        if (row < ui->tableWidget->rowCount() && ui->tableWidget->item(row, 2) && ui->tableWidget->item(row, pokerStarsOffset + 1))
         {
-            if (QString::number(i->toObject().value("eventTime").toDouble(), 'f', 0) != ui->tableWidget->item(row, 1)->text())
+            if (QString::number(i->toObject().value("eventTime").toDouble(), 'f', 0) != ui->tableWidget->item(row, pokerStarsOffset + 1)->text())
                 qDebug() << "eventTime has changed...";
             continue;
         }
         else
         {
-            ui->tableWidget->insertRow(row);
-            ui->tableWidget->setItem(row, 0, new QTableWidgetItem(QString::number(i->toObject().value("id").toDouble(), 'f', 0)));
-            ui->tableWidget->setItem(row, 1, new QTableWidgetItem(QString::number(i->toObject().value("eventTime").toDouble(), 'f', 0)));
-            ui->tableWidget->setItem(row, 2, new QTableWidgetItem(i->toObject().value("name").toString()));
+            if (row == ui->tableWidget->rowCount())
+            {
+                ui->tableWidget->insertRow(row);
+                ui->tableWidget->hideRow(row);
+            }
+            ui->tableWidget->setItem(row, pokerStarsOffset + 0, new QTableWidgetItem(QString::number(i->toObject().value("id").toDouble(), 'f', 0)));
+            ui->tableWidget->setItem(row, pokerStarsOffset + 1, new QTableWidgetItem(QString::number(i->toObject().value("eventTime").toDouble(), 'f', 0)));
+            ui->tableWidget->setItem(row, pokerStarsOffset + 2, new QTableWidgetItem(i->toObject().value("name").toString()));
             added++;
         }
     }
@@ -794,12 +857,14 @@ void HttpWindow::httpPokerStarsTennisHighlightsFinished()
 
         for (i = 0; i < eventIds.count(); i++)
         {
-            if (eventIds[i] == ui->tableWidget->item(row, 0)->text())
+            if (ui->tableWidget->item(row, pokerStarsOffset + 0) == NULL)
+                break;
+            if (eventIds[i] == ui->tableWidget->item(row, pokerStarsOffset + 0)->text())
                 break;
         }
-        if (i >= eventIds.count())
+        if (i >= eventIds.count() && ui->tableWidget->item(row, pokerStarsOffset + 2))
         {
-            ui->tableWidget->item(row, 2)->setBackgroundColor(QColor(255, 0, 0));
+            ui->tableWidget->item(row, pokerStarsOffset + 2)->setBackgroundColor(QColor(255, 0, 0));
             deleted++;
         }
     }
@@ -822,6 +887,12 @@ void HttpWindow::httpPokerStarsTennisHighlightsFinished()
         QString subscribeC = subscribeA + eventIds[i] + subscribeB;
 
         webSocket.sendTextMessage(subscribeC);
+    }
+
+    for (int row = 0; row < ui->tableWidget->rowCount(); row++)
+    {
+        if (ui->tableWidget->item(row, pokerStarsOffset) == NULL)
+            ui->tableWidget->hideRow(row);
     }
 }
 
@@ -857,7 +928,7 @@ void HttpWindow::onColorTimeout()
                         ui->tableWidget->item(row, col)->setBackgroundColor(QColor(backgroundColor.red() - 1, 0, 0));
                     }
                 }
-                else
+                else if (backgroundColor.green() != 0)
                 {
                     ui->tableWidget->item(row, col)->setBackgroundColor(QColor(backgroundColor.red() + 5, 255, backgroundColor.blue() + 5));
                 }
@@ -865,4 +936,85 @@ void HttpWindow::onColorTimeout()
             }
         }
     }
+}
+
+void HttpWindow::arbitrage()
+{
+    for (int row = 0; row < ui->tableWidget->rowCount(); row++)
+    {
+        double maxAbetfair    = 0.0, maxBbetfair    = 0.0;
+        double maxApokerstars = 0.0, maxBpokerstars = 0.0;
+        double marketPercentage = 0.0;
+
+        for (int col = 3; col < 6; col++)
+        {
+            if (ui->tableWidget->item(row, col))
+                maxAbetfair = __max(maxAbetfair, ui->tableWidget->item(row, col)->text().toDouble());
+        }
+        for (int col = 7; col < 10; col++)
+        {
+            if (ui->tableWidget->item(row, col))
+                maxBbetfair = __max(maxBbetfair, ui->tableWidget->item(row, col)->text().toDouble());
+        }
+        for (int col = 16; col < 17; col++)
+        {
+            if (ui->tableWidget->item(row, col))
+                maxApokerstars = __max(maxApokerstars, ui->tableWidget->item(row, col)->text().toDouble());
+        }
+        for (int col = 18; col < 19; col++)
+        {
+            if (ui->tableWidget->item(row, col))
+                maxBpokerstars = __max(maxBpokerstars, ui->tableWidget->item(row, col)->text().toDouble());
+        }
+
+        if (maxAbetfair > 0.0 && maxBbetfair > 0.0 && maxApokerstars > 0.0 && maxBpokerstars > 0.0)
+            marketPercentage = 100.0 / __max(maxAbetfair, maxApokerstars) + 100.0 / __max(maxBbetfair, maxBpokerstars);
+
+        QTableWidgetItem *item = ui->tableWidget->item(row, 22);
+        if (item == NULL)
+        {
+            item = new QTableWidgetItem;
+            ui->tableWidget->setItem(row, 22, item);
+        }
+
+        if (marketPercentage > 0.0)
+        {
+            QString text = QString::number(marketPercentage, 'f', 2);
+
+            if (marketPercentage < 100.0)
+            {
+                item->setBackgroundColor(QColor(255, 0, 255));
+
+                QTableWidgetItem *i = ui->tableWidget->item(row, 23);
+                if (i == NULL)
+                {
+                    i = new QTableWidgetItem;
+                    ui->tableWidget->setItem(row, 23, i);
+                }
+                double a = __max(maxAbetfair, maxApokerstars);
+                double b = __max(maxBbetfair, maxBpokerstars);
+                i->setText(QString::number((a * b - a - b) / (a + 1), 'f', 2));
+            }
+            else
+            {
+                if (item->text() != text)
+                {
+                    item->setBackgroundColor(QColor(0, 255, 0));
+                }
+
+                if (ui->tableWidget->item(row, 23))
+                    ui->tableWidget->item(row, 23)->setText("");
+            }
+            item->setText(text);
+        }
+        else
+        {
+            item->setText("");
+            item->setBackgroundColor(QColor(255, 255, 255));
+
+            if (ui->tableWidget->item(row, 23))
+                ui->tableWidget->item(row, 23)->setText("");
+        }
+    }
+
 }
