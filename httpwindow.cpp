@@ -722,7 +722,7 @@ void HttpWindow::httpPokerStarsRootLadderFinished()
         rootLadder[idx] = decimal;
     }
 
-    urlPokerStarsTennisHighlights   = "https://sports.pokerstars.eu/sportsbook/v1/api/getSportSchedule?sport=TENNIS&marketTypes=AB&days=0%2C1%2C2%2C3%2C4&embedComps=false&maxPrematch=20&maxInplay=20&topupInplay=true&channelId=6&locale=en-gb";
+    urlPokerStarsTennisHighlights   = "https://sports.pokerstars.eu/sportsbook/v1/api/getSportSchedule?sport=TENNIS&marketTypes=AB&days=0%2C1%2C2%2C3%2C4&embedComps=false&maxPrematch=50&maxInplay=20&topupInplay=true&channelId=6&locale=en-gb";
     replyPokerStarsTennisHighlights = qnam.get(QNetworkRequest(urlPokerStarsTennisHighlights));
 
     connect(replyPokerStarsTennisHighlights, SIGNAL(finished()), this, SLOT(httpPokerStarsTennisHighlightsFinished()));
