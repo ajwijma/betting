@@ -57,17 +57,21 @@ HttpWindow::HttpWindow(QWidget *parent) : QDialog(parent), ui(new Ui::Dialog)
 
     m_iTennisHighlightsTimeout = 1;
     m_iTennisMarketsTimeout    = 6;
-    timer = new QTimer;
-    timer->setInterval(1000);
+    betfairTimer = new QTimer;
+    betfairTimer->setInterval(1000);
 
-    keepAlive = new QTimer;
-    keepAlive->setInterval(10000);
+    pokerStarsTimer = new QTimer;
+    pokerStarsTimer->setInterval(10000);
 
-    connect(ui->pushButtonBetfair, SIGNAL(clicked()), timer, SLOT(start()));
+    colorTimer = new QTimer;
+    colorTimer->start(100);
+
+    connect(betfairTimer, SIGNAL(timeout()), this, SLOT(onBetfairTimeout()));
+    connect(pokerStarsTimer, SIGNAL(timeout()), this, SLOT(onPokerStarsTimeout()));
+    connect(colorTimer, SIGNAL(timeout()), this, SLOT(onColorTimeout()));
+
+    connect(ui->pushButtonBetfair, SIGNAL(clicked()), betfairTimer, SLOT(start()));
     connect(ui->pushButtonPokerStars, SIGNAL(clicked()), this, SLOT(pokerStars()));
-    connect(timer, SIGNAL(timeout()), this, SLOT(timerAction()));
-
-    connect(keepAlive, SIGNAL(timeout()), this, SLOT(sendKeepAlive()));
 
     connect(&qnam, SIGNAL(sslErrors(QNetworkReply *, QList<QSslError>)), this, SLOT(sslErrors(QNetworkReply *, QList<QSslError>)));
 }
@@ -77,7 +81,7 @@ HttpWindow::~HttpWindow()
     delete ui;
 }
 
-void HttpWindow::timerAction()
+void HttpWindow::onBetfairTimeout()
 {
     if (--m_iTennisMarketsTimeout <= 0)
     {
@@ -96,7 +100,7 @@ void HttpWindow::downloadTennisHighlights()
 {
     replyTennisHighlights = qnam.get(QNetworkRequest(urlTennisHighlights));
 
-    connect(replyTennisHighlights, SIGNAL(finished()), this, SLOT(httpTennisHighlightsFinished()));
+    connect(replyTennisHighlights, SIGNAL(finished()), this, SLOT(httpBetfairTennisHighlightsFinished()));
 }
 
 void HttpWindow::downloadTennisMarkets()
@@ -119,7 +123,7 @@ void HttpWindow::downloadTennisMarkets()
         if (++count >= 20)
         {
             replyTennisMarkets.append(qnam.get(QNetworkRequest(urlTennisMarkets)));
-            connect(replyTennisMarkets.last(), SIGNAL(finished()), this, SLOT(httpTennisMarketsFinished()));
+            connect(replyTennisMarkets.last(), SIGNAL(finished()), this, SLOT(httpBetfairTennisMarketsFinished()));
 
             urlTennisMarkets = urlTennisMarketsBase;
             count = 0;
@@ -129,12 +133,12 @@ void HttpWindow::downloadTennisMarkets()
     if (count)
     {
         replyTennisMarkets.append(qnam.get(QNetworkRequest(urlTennisMarkets)));
-        connect(replyTennisMarkets.last(), SIGNAL(finished()), this, SLOT(httpTennisMarketsFinished()));
+        connect(replyTennisMarkets.last(), SIGNAL(finished()), this, SLOT(httpBetfairTennisMarketsFinished()));
 
     }
 }
 
-void HttpWindow::httpTennisHighlightsFinished()
+void HttpWindow::httpBetfairTennisHighlightsFinished()
 {
     QJsonDocument   json;
     QJsonParseError error;
@@ -142,7 +146,7 @@ void HttpWindow::httpTennisHighlightsFinished()
 
     json = QJsonDocument::fromJson(replyTennisHighlights->readAll(), &error);
 
-    QFile qq("tennis_highlights.txt");
+    QFile qq("betfair_tennis_highlights.txt");
     qq.open(QIODevice::WriteOnly | QIODevice::Text);
     qq.write(json.toJson());
     qq.close();
@@ -267,7 +271,7 @@ void HttpWindow::httpTennisHighlightsFinished()
 
 void HttpWindow::resizeWindow()
 {
-    qDebug() << size() << sizeHint();
+//  qDebug() << size() << sizeHint();
 
     if (sizeHint() != size())
     {
@@ -276,26 +280,13 @@ void HttpWindow::resizeWindow()
     }
 }
 
-void HttpWindow::httpTennisMarketsFinished()
+void HttpWindow::httpBetfairTennisMarketsFinished()
 {
     QJsonDocument    json;
     QJsonParseError  error;
     QTableWidgetItem *item;
     QNetworkReply    *reply = NULL;
     static int       count  = 0;
-
-    for (int row = 0; row < ui->tableWidget->rowCount(); row++)
-    {
-        if (ui->tableWidget->item(row, 2)->backgroundColor() == QColor(255, 0, 0))
-        {
-            ui->tableWidget->removeRow(row);
-            row--;
-        }
-        else if (ui->tableWidget->item(row, 2)->backgroundColor() == QColor(0, 255, 0))
-        {
-            ui->tableWidget->item(row, 2)->setBackgroundColor(QColor(255, 255, 255));
-        }
-    }
 
     for (QList<QNetworkReply *>::iterator i = replyTennisMarkets.begin(); i != replyTennisMarkets.end(); i++)
     {
@@ -315,7 +306,7 @@ void HttpWindow::httpTennisMarketsFinished()
 
     json = QJsonDocument::fromJson(reply->readAll(), &error);
 
-    QString ww("tennis_markets");
+    QString ww("betfair_tennis_markets");
     ww.append(QString("_%1").arg(count++));
     ww.append(".txt");
     QFile qq(ww);
@@ -373,9 +364,13 @@ void HttpWindow::httpTennisMarketsFinished()
                 text = QString("%1").arg(price);
 
                 if (text == item->text())
-                    item->setBackgroundColor(QColor(255, 255, 255));
+                {
+                    // item->setBackgroundColor(QColor(255, 255, 255));
+                }
                 else
+                {
                     item->setBackgroundColor(QColor(0, 255, 0));
+                }
 
                 item->setText(text);
             }
@@ -405,9 +400,13 @@ void HttpWindow::httpTennisMarketsFinished()
                 text = QString("%1").arg(price);
 
                 if (text == item->text())
-                    item->setBackgroundColor(QColor(255, 255, 255));
+                {
+                    // item->setBackgroundColor(QColor(255, 255, 255));
+                }
                 else
+                {
                     item->setBackgroundColor(QColor(0, 255, 0));
+                }
 
                 item->setText(text);
             }
@@ -421,7 +420,7 @@ void HttpWindow::httpTennisMarketsFinished()
         {
             double p = c[0].toObject().value("price").toDouble();
             double q = e[0].toObject().value("price").toDouble();
-            text = QString("%1").arg(100.0 * (1/p + 1/q));
+            text = QString::number(100.0 / p + 100.0 / q, 'f', 2);
             if (item == NULL)
             {
                 item = new QTableWidgetItem;
@@ -432,9 +431,13 @@ void HttpWindow::httpTennisMarketsFinished()
             else
             {
                 if (text == item->text())
-                    item->setBackgroundColor(QColor(255, 255, 255));
+                {
+                    // item->setBackgroundColor(QColor(255, 255, 255));
+                }
                 else
+                {
                     item->setBackgroundColor(QColor(0, 255, 0));
+                }
 
                 item->setText(text);
             }
@@ -467,17 +470,13 @@ void HttpWindow::sslErrors(QNetworkReply *, const QList<QSslError> &errors)
 
 void HttpWindow::pokerStars()
 {
-    urlPokerStars = "https://sports.pokerstars.eu//sportsbook/v1/api/getSportSchedule?sport=TENNIS&marketTypes=AB&days=0%2C1%2C2%2C3%2C4&embedComps=false&maxPrematch=20&maxInplay=20&topupInplay=true&channelId=6&locale=en-gb";
-//  "{\"UpdateSubcriptions\":{\"snapshotResponse\":true,\"toAdd\":[{\"name\":\"eventSummaries\",\"ids\":\"2854743\"},{\"name\":\"marketTypes\",\"ids\":\"AB\"},{\"name\":\"schedule\",\"ids\":\"tennis\"}]}}"
-    replyPokerStars = qnam.get(QNetworkRequest(urlPokerStars));
-
-    connect(replyPokerStars, SIGNAL(finished()), this, SLOT(httpPokerStarsFinished()));
-
     connect(&webSocket, SIGNAL(connected()), this, SLOT(onConnected()));
     connect(&webSocket, SIGNAL(sslErrors(const QList<QSslError> &)), this, SLOT(onSslErrors(const QList<QSslError> &)));
-    connect(&webSocket, SIGNAL(error(QAbstractSocket::SocketError)), this, SLOT(osError()));
+    connect(&webSocket, SIGNAL(error(QAbstractSocket::SocketError)), this, SLOT(onError()));
 
     webSocket.open(QUrl(QStringLiteral("wss://sports.pokerstars.eu/websocket")));
+
+
 }
 
 void HttpWindow::onError()
@@ -487,11 +486,17 @@ void HttpWindow::onError()
 
 void HttpWindow::onConnected()
 {
-    qDebug() << "WebSocket connected";
+    qDebug() << "WebSocket connected" << webSocket.readBufferSize();
     connect(&webSocket, SIGNAL(textMessageReceived(const QString &)), this, SLOT(onTextMessageReceived(const QString &)));
+    connect(&webSocket, SIGNAL(textFrameReceived(const QString &, bool)), this, SLOT(onTextFrameReceived(const QString &, bool)));
     webSocket.sendTextMessage(QStringLiteral("{\"PublicLoginRequest\":{\"application\":\"web-sportsbook\",\"locale\":\"en-gb\",\"channel\":\"INTERNET\",\"apiVersion\":2,\"reqId\":0}}"));
 
-    keepAlive->start();
+    pokerStarsTimer->start();
+
+    urlPokerStarsRootLadder   = "https://sports.pokerstars.eu/sportsbook/v1/api/getRootLadder";
+    replyPokerStarsRootLadder = qnam.get(QNetworkRequest(urlPokerStarsRootLadder));
+
+    connect(replyPokerStarsRootLadder, SIGNAL(finished()), this, SLOT(httpPokerStarsRootLadderFinished()));
 }
 
 void HttpWindow::onTextMessageReceived(const QString &message)
@@ -500,19 +505,36 @@ void HttpWindow::onTextMessageReceived(const QString &message)
     QJsonParseError error;
     QJsonValue      value;
 
-    qDebug() << "Message received:" << message;
+//  qDebug() << "Message received:" << message.count() << message;
 
     json = QJsonDocument::fromJson(message.toUtf8(), &error);
     if (error.error)
         qDebug() << error.error << error.errorString();
 
-    qDebug() << endl << json << endl;
+//  qDebug() << endl << json << endl;
 
     value = json.object().value("PushMsg");
     if (value.isUndefined())
-        return;
+    {
+        value = json.object().value("SubscribeResponse");
+        if (value.isUndefined())
+            return;
 
-    value = value.toObject().value("eventTradingState");
+        value = value.toObject().value("match");
+        if (value.isUndefined())
+            return;
+        if (value.toArray().size() == 0)
+            return;
+
+        value = value.toArray()[0].toObject().value("eventTradingState");
+
+        QTimer::singleShot(0, this, SLOT(resizeWindow()));
+    }
+    else
+    {
+        value = value.toObject().value("eventTradingState");
+    }
+
     if (value.isUndefined())
         return;
 
@@ -522,18 +544,32 @@ void HttpWindow::onTextMessageReceived(const QString &message)
         return;
     if (value.toObject().value("prices").toObject().value("market").toArray()[0].toObject().value("channel").isUndefined())
         return;
+    if (value.toObject().value("prices").toObject().value("market").toArray()[0].toObject().value("channel").toArray().size() == 0)
+        return;
     if (value.toObject().value("prices").toObject().value("market").toArray()[0].toObject().value("channel").toArray()[0].toObject().value("selection").isUndefined())
+        return;
+    if (value.toObject().value("prices").toObject().value("market").toArray()[0].toObject().value("channel").toArray()[0].toObject().value("selection").toArray().size() < 2)
         return;
     if (value.toObject().value("prices").toObject().value("market").toArray()[0].toObject().value("channel").toArray()[0].toObject().value("selection").toArray()[0].toObject().value("rootIdx").isUndefined())
         return;
 
     if (value.isObject())
     {
-        QString          eventId;
+        QString          eventId, text;
         int              row;
         QJsonArray       selection;
+        int              idxA, idxB;
         double           priceA, priceB;
         QTableWidgetItem *item;
+        static int       count = 0;
+
+        QString ww("pokerstars_event_trading_state");
+        ww.append(QString("_%1").arg(count++));
+        ww.append(".txt");
+        QFile qq(ww);
+        qq.open(QIODevice::WriteOnly | QIODevice::Text);
+        qq.write(json.toJson());
+        qq.close();
 
         eventId = QString::number(value.toObject().value("id").toDouble(), 'f', 0);
 
@@ -549,29 +585,57 @@ void HttpWindow::onTextMessageReceived(const QString &message)
         }
 
         selection = value.toObject().value("prices").toObject().value("market").toArray()[0].toObject().value("channel").toArray()[0].toObject().value("selection").toArray();
-        qDebug() << selection.count();
-        priceA = 100.0 / selection[0].toObject().value("rootIdx").toDouble();
-        priceB = 100.0 / selection[1].toObject().value("rootIdx").toDouble();
+//      qDebug() << selection.count();
+        idxB = (int)selection[0].toObject().value("rootIdx").toDouble(); // waarom omgekeerd
+        idxA = (int)selection[1].toObject().value("rootIdx").toDouble(); // weet ik nog niet
+        priceA = rootLadder[idxA];
+        priceB = rootLadder[idxB];
 
+        text = QString::number(priceA, 'f', 2);
         item = ui->tableWidget->item(row, 5);
         if (item == 0)
         {
             item = new QTableWidgetItem;
             ui->tableWidget->setItem(row, 5, item);
         }
-        item->setText(QString::number(priceA, 'f', 2));
+        if (text != item->text())
+            item->setBackgroundColor(QColor(0, 255, 0));
+        item->setText(text);
 
+        text = QString::number(priceB, 'f', 2);
         item = ui->tableWidget->item(row, 7);
         if (item == 0)
         {
             item = new QTableWidgetItem;
             ui->tableWidget->setItem(row, 7, item);
+            item->setBackgroundColor(QColor(0, 255, 0));
         }
-        item->setText(QString::number(priceB, 'f', 2));
+        if (text != item->text())
+            item->setBackgroundColor(QColor(0, 255, 0));
+        item->setText(text);
+
+        text = QString::number(100.0 / priceA + 100.0 / priceB, 'f', 2);
+        item = ui->tableWidget->item(row, 11);
+        if (item == 0)
+        {
+            item = new QTableWidgetItem;
+            ui->tableWidget->setItem(row, 11, item);
+            item->setBackgroundColor(QColor(0, 255, 0));
+        }
+        if (text != item->text())
+            item->setBackgroundColor(QColor(0, 255, 0));
+        item->setText(text);
     }
+
+    ui->tableWidget->resizeColumnsToContents();
 }
 
-void HttpWindow::sendKeepAlive()
+void HttpWindow::onTextFrameReceived(const QString &frame, bool last)
+{
+//  qDebug() << "last:" << last << "frame:" << frame.count() << frame << endl;
+}
+
+void HttpWindow::onPokerStarsTimeout()
 {
     webSocket.sendTextMessage("{KeepAlive:{reqId:1}}");
 }
@@ -589,7 +653,52 @@ void HttpWindow::onSslErrors(const QList<QSslError> &errors)
     webSocket.ignoreSslErrors();
 }
 
-void HttpWindow::httpPokerStarsFinished()
+void HttpWindow::httpPokerStarsRootLadderFinished()
+{
+    QJsonDocument   json;
+    QJsonParseError error;
+    QJsonArray      array;
+
+    json = QJsonDocument::fromJson(replyPokerStarsRootLadder->readAll(), &error);
+
+    replyPokerStarsRootLadder->deleteLater();
+    replyPokerStarsRootLadder = NULL;
+
+    QFile qq("pokerstars_root_ladder.txt");
+    qq.open(QIODevice::WriteOnly | QIODevice::Text);
+    qq.write(json.toJson());
+    qq.close();
+
+    if (json.object().value("PriceAdjustmentDetailsResponse").isUndefined())
+        return;
+    if (json.object().value("PriceAdjustmentDetailsResponse").toObject().value("rootLadder").isUndefined())
+        return;
+
+    array = json.object().value("PriceAdjustmentDetailsResponse").toObject().value("rootLadder").toArray();
+
+    rootLadder.clear();
+    rootLadder.reserve(array.size());
+    for (int i = 0; i < array.size(); i++)
+    {
+        rootLadder.append(0.0);
+    }
+    for (int i = 0; i < array.size(); i++)
+    {
+        int    idx     = (int)array[i].toObject().value("rootIndex").toDouble();
+        double decimal = array[i].toObject().value("decimal").toString().toDouble();
+
+        qDebug() << idx << decimal;
+
+        rootLadder[idx] = decimal;
+    }
+
+    urlPokerStarsTennisHighlights   = "https://sports.pokerstars.eu/sportsbook/v1/api/getSportSchedule?sport=TENNIS&marketTypes=AB&days=0%2C1%2C2%2C3%2C4&embedComps=false&maxPrematch=20&maxInplay=20&topupInplay=true&channelId=6&locale=en-gb";
+    replyPokerStarsTennisHighlights = qnam.get(QNetworkRequest(urlPokerStarsTennisHighlights));
+
+    connect(replyPokerStarsTennisHighlights, SIGNAL(finished()), this, SLOT(httpPokerStarsTennisHighlightsFinished()));
+}
+
+void HttpWindow::httpPokerStarsTennisHighlightsFinished()
 {
     QJsonDocument   json;
     QJsonParseError error;
@@ -597,9 +706,9 @@ void HttpWindow::httpPokerStarsFinished()
     QJsonArray      inPlay, preMatch;
     int             added = 0, deleted = 0;
 
-    json = QJsonDocument::fromJson(replyPokerStars->readAll(), &error);
+    json = QJsonDocument::fromJson(replyPokerStarsTennisHighlights->readAll(), &error);
 
-    QFile qq("pokerstars.txt");
+    QFile qq("pokerstars_tennis_higlights.txt");
     qq.open(QIODevice::WriteOnly | QIODevice::Text);
     qq.write(json.toJson());
     qq.close();
@@ -694,14 +803,9 @@ void HttpWindow::httpPokerStarsFinished()
 
     QTimer::singleShot(0, this, SLOT(resizeWindow()));
 
-    replyPokerStars->deleteLater();
-    replyPokerStars = NULL;
+    replyPokerStarsTennisHighlights->deleteLater();
+    replyPokerStarsTennisHighlights = NULL;
 
-    QTimer::singleShot(5000, this, SLOT(subscribe()));
-}
-
-void HttpWindow::subscribe()
-{
     QString subscribeA = "{\"UpdateSubcriptions\":{\"snapshotResponse\":true,\"toAdd\":[{\"name\":\"eventSummaries\",\"ids\":\"";
     QString subscribeB = "\"},{\"name\":\"marketTypes\",\"ids\":\"AB\"},{\"name\":\"schedule\",\"ids\":\"tennis\"}]}}";
 
@@ -710,5 +814,47 @@ void HttpWindow::subscribe()
         QString subscribeC = subscribeA + eventIds[i] + subscribeB;
 
         webSocket.sendTextMessage(subscribeC);
+    }
+}
+
+void HttpWindow::onColorTimeout()
+{
+    for (int row = 0; row < ui->tableWidget->rowCount(); row++)
+    {
+        int r = row;
+        for (int col = 0; col < ui->tableWidget->columnCount(); col++)
+        {
+            QColor backgroundColor;
+
+            if (row != r)
+                continue;
+
+            if (ui->tableWidget->item(row, col))
+                backgroundColor = ui->tableWidget->item(row, col)->backgroundColor();
+            else
+                continue;
+
+            if (backgroundColor.blue() != 255)
+            {
+                if (backgroundColor.red() != backgroundColor.blue() && backgroundColor.red() >= 200)
+                {
+                    if (backgroundColor.red() == 200)
+                    {
+                        ui->tableWidget->removeRow(row);
+                        row--;
+                        continue;
+                    }
+                    else
+                    {
+                        ui->tableWidget->item(row, col)->setBackgroundColor(QColor(backgroundColor.red() - 1, 0, 0));
+                    }
+                }
+                else
+                {
+                    ui->tableWidget->item(row, col)->setBackgroundColor(QColor(backgroundColor.red() + 5, 255, backgroundColor.blue() + 5));
+                }
+
+            }
+        }
     }
 }

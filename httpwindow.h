@@ -66,43 +66,51 @@ public:
     ~HttpWindow();
 
 private slots:
-    void timerAction();
-    void sendKeepAlive();
+    void onBetfairTimeout();
+    void onPokerStarsTimeout();
     void downloadTennisHighlights();
     void downloadTennisMarkets();
-    void httpTennisHighlightsFinished();
-    void httpTennisMarketsFinished();
-    void httpPokerStarsFinished();
+    void httpBetfairTennisHighlightsFinished();
+    void httpBetfairTennisMarketsFinished();
+    void httpPokerStarsTennisHighlightsFinished();
+    void httpPokerStarsRootLadderFinished();
     void sslErrors(QNetworkReply *, const QList<QSslError> &errors);
     void pokerStars();
     void onConnected();
+    void onTextFrameReceived(const QString &frame, bool last);
     void onTextMessageReceived(const QString &message);
     void onSslErrors(const QList<QSslError> &errors);
     void resizeWindow();
-    void subscribe();
     void onError();
+    void onColorTimeout();
 
 private:
     Ui::Dialog *ui;
     QString urlTennisHighlights;
     QString urlTennisMarketsBase;
     QString urlTennisMarkets;
-    QString urlPokerStars;
+    QString urlPokerStarsRootLadder;
+    QString urlPokerStarsTennisHighlights;
 
     QUrl url;
     QNetworkAccessManager qnam;
+
     QNetworkReply *replyTennisHighlights;
-    int replies;
     QList<QNetworkReply *>replyTennisMarkets;
-    QNetworkReply *replyPokerStars;
+
+    QNetworkReply *replyPokerStarsRootLadder;
+    QNetworkReply *replyPokerStarsTennisHighlights;
 
     QStringList marketIds;
+
+    QList<double> rootLadder;
     QStringList eventIds;
 
-    QTimer *timer;
-    QTimer *keepAlive;
-    int m_iTennisHighlightsTimeout;
-    int m_iTennisMarketsTimeout;
+    QTimer *betfairTimer;
+    int     m_iTennisHighlightsTimeout;
+    int     m_iTennisMarketsTimeout;
+    QTimer *pokerStarsTimer;
+    QTimer *colorTimer;
 
     QWebSocket webSocket;
 };
