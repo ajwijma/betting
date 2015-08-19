@@ -297,8 +297,8 @@ void HttpWindow::resizeWindow()
 
     if (sizeHint() != size())
     {
-//      resize(sizeHint());
-        adjustSize();
+        resize(sizeHint());
+//      adjustSize();
     }
 }
 
