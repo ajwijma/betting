@@ -974,7 +974,9 @@ void HttpWindow::arbitrage()
         }
 
         if (maxAbetfair > 0.0 && maxBbetfair > 0.0 && maxApokerstars > 0.0 && maxBpokerstars > 0.0)
+        {
             marketPercentage = 100.0 / std::max(maxAbetfair, maxApokerstars) + 100.0 / std::max(maxBbetfair, maxBpokerstars);
+        }
 
         QTableWidgetItem *item = ui->tableWidget->item(row, 22);
         if (item == NULL)
@@ -989,6 +991,16 @@ void HttpWindow::arbitrage()
 
             if (marketPercentage < 100.0)
             {
+                if (maxAbetfair > maxApokerstars)
+                    ui->tableWidget->item(row, 5)->setBackgroundColor(QColor(255, 0, 255));
+                else
+                    ui->tableWidget->item(row, 16)->setBackgroundColor(QColor(255, 0, 255));
+
+                if (maxBbetfair > maxBpokerstars)
+                    ui->tableWidget->item(row, 7)->setBackgroundColor(QColor(255, 0, 255));
+                else
+                    ui->tableWidget->item(row, 18)->setBackgroundColor(QColor(255, 0, 255));
+
                 item->setBackgroundColor(QColor(255, 0, 255));
 
                 QTableWidgetItem *i = ui->tableWidget->item(row, 23);
@@ -1003,6 +1015,15 @@ void HttpWindow::arbitrage()
             }
             else
             {
+                if (ui->tableWidget->item(row, 5)->backgroundColor() == QColor(255, 0, 255))
+                    ui->tableWidget->item(row, 5)->setBackgroundColor(ui->tableWidget->item(row, 11)->backgroundColor());
+                if (ui->tableWidget->item(row, 7)->backgroundColor() == QColor(255, 0, 255))
+                    ui->tableWidget->item(row, 7)->setBackgroundColor(ui->tableWidget->item(row, 11)->backgroundColor());
+                if (ui->tableWidget->item(row, 16)->backgroundColor() == QColor(255, 0, 255))
+                    ui->tableWidget->item(row, 16)->setBackgroundColor(ui->tableWidget->item(row, 20)->backgroundColor());
+                if (ui->tableWidget->item(row, 18)->backgroundColor() == QColor(255, 0, 255))
+                    ui->tableWidget->item(row, 18)->setBackgroundColor(ui->tableWidget->item(row, 20)->backgroundColor());
+
                 if (item->text() != text)
                 {
                     item->setBackgroundColor(QColor(0, 255, 0));
